@@ -1,0 +1,1604 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>イベント管理システム</title>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, push, get, update, remove, onValue }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ========== ★ Firebase設定をここに入力 ★ ==========
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+  // ====================================================
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  window._db = db;
+  window._dbRef = ref;
+  window._dbSet = set;
+  window._dbPush = push;
+  window._dbGet = get;
+  window._dbUpdate = update;
+  window._dbRemove = remove;
+  window._dbOnValue = onValue;
+  window._firebaseReady = true;
+  document.dispatchEvent(new Event('firebaseReady'));
+</script>
+
+<!-- EmailJS -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<!-- QRCode -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;600&family=Noto+Sans+JP:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --ink: #1a1714;
+  --ink-light: #4a4540;
+  --paper: #f9f6f1;
+  --paper-mid: #ede9e2;
+  --paper-dark: #d9d3c8;
+  --gold: #b8975a;
+  --gold-light: #d4b483;
+  --red: #c0392b;
+  --green: #2d6a4f;
+  --blue: #2c5f8a;
+  --navy: #0d1b3e;
+  --navy-mid: #162347;
+  --r: 6px;
+  --shadow: 0 2px 20px rgba(13,27,62,0.18);
+  --shadow-lg: 0 8px 40px rgba(13,27,62,0.28);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--navy);
+  color: var(--ink);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* ページ全体の背景 */
+.page {
+  background: transparent;
+}
+
+/* カードは白を維持しつつ、ページ背景が紺に */
+
+/* ── HEADER ── */
+.site-header {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.site-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  color: var(--gold-light);
+}
+.site-title span {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 13px;
+  display: block;
+  color: var(--paper-dark);
+  letter-spacing: 0.15em;
+}
+.header-nav { display: flex; gap: 4px; }
+.nav-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--paper-dark);
+  padding: 6px 16px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  transition: all 0.2s;
+  letter-spacing: 0.05em;
+}
+.nav-btn:hover { border-color: var(--gold); color: var(--gold-light); }
+.nav-btn.active { background: var(--gold); color: var(--ink); border-color: var(--gold); font-weight: 500; }
+
+/* ── PAGES ── */
+.page { display: none; padding: 32px; max-width: 1100px; margin: 0 auto; }
+.page.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── SECTION HEADER ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--paper-dark);
+}
+.section-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink);
+}
+.section-title .sub {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 13px;
+  color: var(--gold);
+  display: block;
+  letter-spacing: 0.1em;
+  font-style: italic;
+}
+
+/* ── CARDS ── */
+.card {
+  background: #fff;
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  padding: 24px;
+  margin-bottom: 16px;
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: var(--shadow-lg); }
+
+.event-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+.event-title {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 17px;
+  font-weight: 400;
+  margin-bottom: 6px;
+}
+.event-meta {
+  font-size: 12px;
+  color: var(--ink-light);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.event-meta span::before { margin-right: 4px; }
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+.badge-open { background: #e8f5e9; color: var(--green); border: 1px solid #a5d6a7; }
+.badge-closed { background: #fce4ec; color: var(--red); border: 1px solid #f48fb1; }
+.badge-draft { background: var(--paper-mid); color: var(--ink-light); border: 1px solid var(--paper-dark); }
+
+/* ── BUTTONS ── */
+.btn {
+  padding: 8px 20px;
+  border-radius: var(--r);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary { background: var(--gold); color: var(--ink); }
+.btn-primary:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(184,151,90,0.3); }
+.btn-outline { background: transparent; border: 1px solid var(--paper-dark); color: var(--ink-light); }
+.btn-outline:hover { border-color: var(--gold); color: var(--gold); }
+.btn-danger { background: transparent; border: 1px solid #f5c6cb; color: var(--red); }
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── FORMS ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid.full { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group.span2 { grid-column: span 2; }
+label {
+  font-size: 12px;
+  color: var(--ink-light);
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+label .req { color: var(--red); margin-left: 2px; }
+input[type=text], input[type=email], input[type=tel], input[type=number],
+input[type=date], input[type=time], textarea, select {
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--r);
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  width: 100%;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(184,151,90,0.15);
+  background: #fff;
+}
+textarea { resize: vertical; min-height: 80px; }
+.hint { font-size: 11px; color: var(--ink-light); }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26,23,20,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; animation: fadeIn 0.2s ease; }
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--paper-mid);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+.modal-title { font-family: 'Noto Serif JP', serif; font-size: 17px; font-weight: 400; }
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--ink-light);
+  line-height: 1;
+  padding: 4px;
+}
+.modal-body { padding: 24px; }
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--paper-mid);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: var(--paper-mid);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-light);
+  font-weight: 500;
+  white-space: nowrap;
+}
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--paper-mid);
+  vertical-align: top;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--paper); }
+.paid-yes { color: var(--green); font-weight: 500; }
+.paid-no { color: var(--red); }
+
+/* ── STATS ── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: #fff;
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--r);
+  padding: 16px 20px;
+  text-align: center;
+}
+.stat-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px;
+  font-weight: 300;
+  color: var(--gold);
+  line-height: 1.1;
+}
+.stat-label { font-size: 11px; color: var(--ink-light); letter-spacing: 0.1em; margin-top: 4px; }
+
+/* ── LINK BOX ── */
+.link-box {
+  background: var(--paper-mid);
+  border: 1px dashed var(--paper-dark);
+  border-radius: var(--r);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.link-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  color: var(--blue);
+  font-family: monospace;
+  outline: none;
+  padding: 0;
+  width: 0;
+}
+.link-box input:focus { box-shadow: none; border: none; }
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--ink-light);
+}
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 14px; }
+
+/* ── TOAST ── */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 12px 20px;
+  border-radius: var(--r);
+  font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.3s ease;
+  max-width: 320px;
+}
+.toast.success { border-left: 3px solid var(--gold); }
+.toast.error { border-left: 3px solid var(--red); }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+/* ── SETUP PAGE ── */
+.setup-card {
+  max-width: 560px;
+  margin: 40px auto;
+}
+.setup-card h2 { font-family: 'Noto Serif JP', serif; font-size: 18px; margin-bottom: 20px; }
+.code-block {
+  background: #1a1714;
+  color: #d4b483;
+  padding: 16px;
+  border-radius: var(--r);
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+/* ── PUBLIC FORM ── */
+.public-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+}
+.public-header {
+  background: linear-gradient(135deg, var(--navy-mid) 0%, #1a2f5e 100%);
+  border-bottom: 3px solid var(--gold);
+  text-align: center;
+  padding: 36px 32px 28px;
+  margin: 0 -24px 32px;
+  position: relative;
+  overflow: hidden;
+}
+.public-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(184,151,90,0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+.public-header .label-申込 {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  padding: 3px 12px;
+  border-radius: 20px;
+  margin-bottom: 14px;
+  font-family: 'Cormorant Garamond', serif;
+}
+.public-header .event-name {
+  font-family: 'Noto Serif JP', serif;
+  font-size: 24px;
+  font-weight: 400;
+  color: #fff;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  text-shadow: 0 1px 8px rgba(0,0,0,0.3);
+}
+.public-header .event-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+}
+.public-header .event-meta-row span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.public-header .divider {
+  width: 40px;
+  height: 1px;
+  background: var(--gold);
+  margin: 0 auto 16px;
+  opacity: 0.6;
+}
+.payment-options { display: flex; gap: 12px; margin-top: 8px; }
+.payment-option {
+  flex: 1;
+  border: 1px solid var(--paper-dark);
+  border-radius: var(--r);
+  padding: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  background: var(--paper);
+}
+.payment-option:hover { border-color: var(--gold); }
+.payment-option.selected { border-color: var(--gold); background: #fff9ef; }
+.payment-option input { display: none; }
+.payment-option .method-name { font-size: 13px; font-weight: 500; display: block; margin-top: 4px; }
+.companion-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.companion-row input { flex: 1; }
+.companion-row button { flex-shrink: 0; }
+.form-divider { border: none; border-top: 1px solid var(--paper-dark); margin: 20px 0; }
+.success-screen { text-align: center; padding: 40px 20px; }
+.success-screen .checkmark { font-size: 56px; margin-bottom: 16px; }
+.success-screen h2 { font-family: 'Noto Serif JP', serif; font-weight: 400; font-size: 20px; margin-bottom: 12px; }
+.success-screen p { color: var(--ink-light); font-size: 13px; }
+
+/* ── PAYMENT INFO ── */
+.payment-info-box {
+  background: #fffef5;
+  border: 1px solid #e6d98e;
+  border-radius: var(--r);
+  padding: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.9;
+}
+.payment-info-box strong { color: var(--ink); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 640px) {
+  .page { padding: 20px 16px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-group.span2 { grid-column: span 1; }
+  .event-card { grid-template-columns: 1fr; }
+  .site-header { padding: 0 16px; }
+  .nav-btn { padding: 6px 10px; font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="site-header">
+  <div class="site-title">
+    Event Manager
+    <span>イベント管理システム</span>
+  </div>
+  <nav class="header-nav" id="mainNav">
+    <button class="nav-btn active" onclick="showPage('events')">イベント一覧</button>
+    <button class="nav-btn" onclick="showPage('settings')">⚙ 設定</button>
+  </nav>
+</header>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ========== PAGE: EVENTS ========== -->
+<div id="page-events" class="page active">
+  <div class="section-header">
+    <div class="section-title">
+      <span class="sub">Event Management</span>
+      イベント一覧
+    </div>
+    <button class="btn btn-primary" onclick="openEventModal()">＋ 新規イベント</button>
+  </div>
+  <div id="eventList">
+    <div class="empty-state">
+      <div class="icon">📅</div>
+      <p>まだイベントがありません<br>「新規イベント」から作成してください</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== PAGE: PARTICIPANTS ========== -->
+<div id="page-participants" class="page">
+  <div class="section-header">
+    <div class="section-title">
+      <span class="sub" id="ptEventSub">Participants</span>
+      <span id="ptEventTitle">参加者管理</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline btn-sm" onclick="showPage('events')">← 一覧に戻る</button>
+      <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 CSV出力</button>
+    </div>
+  </div>
+
+  <div class="stats-grid" id="ptStats"></div>
+
+  <!-- 申し込みリンク -->
+  <div class="card" style="margin-bottom:16px;">
+    <div style="font-size:12px;color:var(--ink-light);margin-bottom:6px;letter-spacing:0.05em;">申し込みURL（参加者へ共有）</div>
+    <div class="link-box">
+      <input type="text" id="publicUrl" readonly>
+      <button class="btn btn-sm btn-outline" onclick="copyLink()">コピー</button>
+      <button class="btn btn-sm btn-outline" onclick="openQrModal()">QR</button>
+      <button class="btn btn-sm btn-primary" onclick="openPublicForm()">プレビュー</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table id="ptTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>氏名</th>
+            <th>メール</th>
+            <th>電話</th>
+            <th>性別</th>
+            <th>住所</th>
+            <th>紹介者</th>
+            <th>人数</th>
+            <th>同伴者</th>
+            <th>支払い方法</th>
+            <th>入金</th>
+            <th>申込日</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="ptTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== PAGE: PUBLIC FORM ========== -->
+<div id="page-public" class="page">
+  <div class="public-wrap">
+    <div class="public-header">
+      <div class="label-申込">お申し込みフォーム</div>
+      <div class="event-name" id="pubEventName">イベント名</div>
+      <div class="divider"></div>
+      <div class="event-meta-row" id="pubEventMeta"></div>
+    </div>
+    <div id="pubFormArea"></div>
+  </div>
+</div>
+
+<!-- ========== PAGE: SETTINGS ========== -->
+<div id="page-settings" class="page">
+  <div class="section-header">
+    <div class="section-title">
+      <span class="sub">Configuration</span>
+      設定
+    </div>
+  </div>
+
+  <div class="card setup-card" style="max-width:100%;margin:0 0 16px;">
+    <h3 style="font-family:'Noto Serif JP',serif;font-weight:400;margin-bottom:16px;">EmailJS 設定</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Public Key</label>
+        <input type="text" id="ejPublicKey" placeholder="xxxxxxxxxxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>Service ID</label>
+        <input type="text" id="ejServiceId" placeholder="service_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>Template ID（参加者確認メール）</label>
+        <input type="text" id="ejTemplateId" placeholder="template_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>管理者通知テンプレートID（任意）</label>
+        <input type="text" id="ejAdminTemplateId" placeholder="template_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>管理者メールアドレス</label>
+        <input type="email" id="ejAdminEmail" placeholder="admin@example.com">
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn btn-primary" onclick="saveEmailSettings()">保存</button>
+    </div>
+    <div style="margin-top:20px;">
+      <div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">EmailJS テンプレート変数（参加者向け）</div>
+      <div class="code-block">{{to_email}}     → 参加者メール
+{{to_name}}      → 参加者氏名
+{{event_name}}   → イベント名
+{{event_date}}   → 開催日
+{{event_venue}}  → 会場
+{{fee}}          → 参加費
+{{payment}}      → 支払い方法
+{{companions}}   → 同伴者名
+{{total_count}}  → 合計人数</div>
+    </div>
+  </div>
+
+  <div class="card" style="max-width:100%;">
+    <h3 style="font-family:'Noto Serif JP',serif;font-weight:400;margin-bottom:16px;">Firebase 設定について</h3>
+    <p style="font-size:13px;color:var(--ink-light);line-height:2;">
+      このファイル冒頭の <code>firebaseConfig</code> に Firebase プロジェクトの設定値を入力してください。<br>
+      Firebase Console → プロジェクト設定 → マイアプリ → SDK の設定と構成 から取得できます。
+    </p>
+    <div style="margin-top:12px;font-size:12px;color:var(--ink-light);">
+      推奨 Realtime Database ルール：
+    </div>
+    <div class="code-block">{
+  "rules": {
+    "events": {
+      ".read": true,
+      ".write": true
+    },
+    "registrations": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}</div>
+    <p style="font-size:11px;color:var(--red);margin-top:8px;">※ 本番運用時は認証を追加してください。</p>
+  </div>
+</div>
+
+<!-- ========== MODAL: QRコード ========== -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header">
+      <div class="modal-title">申し込みQRコード</div>
+      <button class="modal-close" onclick="closeQrModal()">✕</button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <div id="qrEventName" style="font-family:'Noto Serif JP',serif;font-size:15px;margin-bottom:4px;"></div>
+      <div id="qrEventDate" style="font-size:12px;color:var(--ink-light);margin-bottom:20px;"></div>
+      <div style="display:inline-block;background:#fff;padding:16px;border-radius:8px;border:1px solid var(--paper-dark);box-shadow:var(--shadow);">
+        <canvas id="qrCanvas"></canvas>
+      </div>
+      <div style="margin-top:16px;font-size:11px;color:var(--ink-light);word-break:break-all;" id="qrUrlText"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;gap:12px;">
+      <button class="btn btn-outline" onclick="copyLink();showToast('URLをコピーしました ✓','success')">🔗 URLコピー</button>
+      <button class="btn btn-primary" onclick="downloadQR()">⬇ PNG保存</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="eventModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="eventModalTitle">新規イベント作成</div>
+      <button class="modal-close" onclick="closeEventModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group span2">
+          <label>イベント名 <span class="req">*</span></label>
+          <input type="text" id="evName" placeholder="例：春のサロンコンサート 2025">
+        </div>
+        <div class="form-group">
+          <label>開催日 <span class="req">*</span></label>
+          <input type="date" id="evDate">
+        </div>
+        <div class="form-group">
+          <label>開催時間</label>
+          <input type="time" id="evTime">
+        </div>
+        <div class="form-group span2">
+          <label>会場</label>
+          <input type="text" id="evVenue" placeholder="例：〇〇ホール、自宅サロン">
+        </div>
+        <div class="form-group">
+          <label>参加費（円）</label>
+          <input type="number" id="evFee" placeholder="3000" min="0">
+        </div>
+        <div class="form-group">
+          <label>定員（0＝無制限）</label>
+          <input type="number" id="evCapacity" placeholder="20" min="0">
+        </div>
+        <div class="form-group span2">
+          <label>振込先情報</label>
+          <textarea id="evBankInfo" placeholder="銀行名：〇〇銀行&#10;支店名：〇〇支店&#10;口座番号：1234567&#10;名義：ヤマダ ハナコ"></textarea>
+        </div>
+        <div class="form-group span2">
+          <label>PayPay ID / 送金リンク</label>
+          <input type="text" id="evPaypayInfo" placeholder="例：PayPay ID: hanako_yamada">
+        </div>
+        <div class="form-group span2">
+          <label>説明・備考</label>
+          <textarea id="evDesc" placeholder="イベントの詳細、注意事項など"></textarea>
+        </div>
+        <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
+          <label style="font-size:13px;color:var(--ink);margin-bottom:10px;display:block;">申し込みフォームの収集項目</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="form-group">
+              <label>同伴者名の収集</label>
+              <select id="evCompanionMode">
+                <option value="none">不要</option>
+                <option value="count">人数のみ</option>
+                <option value="names">全員の氏名</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>住所の収集</label>
+              <select id="evAddressMode">
+                <option value="none">不要</option>
+                <option value="optional">任意</option>
+                <option value="required">必須</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>性別の収集</label>
+              <select id="evGenderMode">
+                <option value="none">不要</option>
+                <option value="optional">任意</option>
+                <option value="required">必須</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>性別の選択肢</label>
+              <select id="evGenderOptions">
+                <option value="standard">男性／女性／その他</option>
+                <option value="simple">男性／女性</option>
+                <option value="full">男性／女性／その他／回答しない</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>紹介者欄の収集</label>
+              <select id="evReferrerMode">
+                <option value="none">不要</option>
+                <option value="optional">任意</option>
+                <option value="required">必須</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>紹介者欄のラベル名</label>
+              <input type="text" id="evReferrerLabel" placeholder="例：ご紹介者のお名前">
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>ステータス</label>
+          <select id="evStatus">
+            <option value="open">受付中</option>
+            <option value="closed">受付終了</option>
+            <option value="draft">下書き</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEventModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEvent()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== MODAL: 入金ステータス更新 ========== -->
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <div class="modal-title">入金ステータス更新</div>
+      <button class="modal-close" onclick="closePaymentModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="paymentModalName" style="font-weight:500;margin-bottom:16px;"></p>
+      <div class="form-group">
+        <label>入金状況</label>
+        <select id="paymentStatus">
+          <option value="pending">未入金</option>
+          <option value="paid">入金済み</option>
+          <option value="waived">免除</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label>メモ</label>
+        <input type="text" id="paymentNote" placeholder="入金日など">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePaymentModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="updatePayment()">更新</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== STATE ====================
+let currentEventId = null;
+let editingEventId = null;
+let editingRegId = null;
+let appSettings = {};
+let allEvents = {};
+let allRegs = {};
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  // Firebase ready event
+  if (window._firebaseReady) {
+    initFirebaseListeners();
+  } else {
+    document.addEventListener('firebaseReady', initFirebaseListeners);
+    // Fallback: show events page without firebase
+    setTimeout(() => {
+      if (!window._firebaseReady) {
+        showToast('Firebase未設定。「設定」から設定してください。', 'error');
+        renderEventList();
+      }
+    }, 3000);
+  }
+});
+
+function initFirebaseListeners() {
+  const db = window._db;
+  const ref = window._dbRef;
+  const onValue = window._dbOnValue;
+
+  onValue(ref(db, 'events'), snap => {
+    allEvents = snap.val() || {};
+    if (currentEventId && document.getElementById('page-participants').classList.contains('active')) {
+      renderParticipants(currentEventId);
+    }
+    renderEventList();
+  });
+
+  onValue(ref(db, 'registrations'), snap => {
+    allRegs = snap.val() || {};
+    if (currentEventId && document.getElementById('page-participants').classList.contains('active')) {
+      renderParticipants(currentEventId);
+    }
+  });
+}
+
+// ==================== SETTINGS ====================
+function loadSettings() {
+  const s = localStorage.getItem('eventMgrSettings');
+  if (s) {
+    appSettings = JSON.parse(s);
+    if (appSettings.ejPublicKey) {
+      document.getElementById('ejPublicKey').value = appSettings.ejPublicKey;
+      document.getElementById('ejServiceId').value = appSettings.ejServiceId || '';
+      document.getElementById('ejTemplateId').value = appSettings.ejTemplateId || '';
+      document.getElementById('ejAdminTemplateId').value = appSettings.ejAdminTemplateId || '';
+      document.getElementById('ejAdminEmail').value = appSettings.ejAdminEmail || '';
+      emailjs.init(appSettings.ejPublicKey);
+    }
+  }
+}
+
+function saveEmailSettings() {
+  appSettings.ejPublicKey = document.getElementById('ejPublicKey').value.trim();
+  appSettings.ejServiceId = document.getElementById('ejServiceId').value.trim();
+  appSettings.ejTemplateId = document.getElementById('ejTemplateId').value.trim();
+  appSettings.ejAdminTemplateId = document.getElementById('ejAdminTemplateId').value.trim();
+  appSettings.ejAdminEmail = document.getElementById('ejAdminEmail').value.trim();
+  localStorage.setItem('eventMgrSettings', JSON.stringify(appSettings));
+  if (appSettings.ejPublicKey) emailjs.init(appSettings.ejPublicKey);
+  showToast('設定を保存しました ✓', 'success');
+}
+
+// ==================== PAGES ====================
+function showPage(page, eventId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+
+  const navMap = { events: 0, participants: 1, settings: 1 };
+  const navBtns = document.querySelectorAll('.nav-btn');
+  if (page === 'events') navBtns[0].classList.add('active');
+  if (page === 'settings') navBtns[1].classList.add('active');
+
+  if (page === 'participants' && eventId) {
+    currentEventId = eventId;
+    renderParticipants(eventId);
+    const url = window.location.href.split('#')[0] + '#form-' + eventId;
+    document.getElementById('publicUrl').value = url;
+  }
+  if (page === 'public' && eventId) {
+    renderPublicForm(eventId);
+  }
+}
+
+// ==================== EVENT LIST ====================
+function renderEventList() {
+  const container = document.getElementById('eventList');
+  const events = Object.entries(allEvents);
+
+  if (events.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📅</div><p>まだイベントがありません<br>「新規イベント」から作成してください</p></div>`;
+    return;
+  }
+
+  events.sort((a, b) => (b[1].date || '') > (a[1].date || '') ? -1 : 1);
+
+  container.innerHTML = events.map(([id, ev]) => {
+    const regs = Object.values(allRegs[id] || {});
+    const totalPpl = regs.reduce((s, r) => s + (r.totalCount || 1), 0);
+    const paid = regs.filter(r => r.paymentStatus === 'paid').length;
+    const badgeCls = ev.status === 'open' ? 'badge-open' : ev.status === 'closed' ? 'badge-closed' : 'badge-draft';
+    const badgeTxt = ev.status === 'open' ? '受付中' : ev.status === 'closed' ? '受付終了' : '下書き';
+    return `
+      <div class="card event-card">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+            <div class="event-title">${esc(ev.name)}</div>
+            <span class="badge ${badgeCls}">${badgeTxt}</span>
+          </div>
+          <div class="event-meta">
+            ${ev.date ? `<span>📅 ${ev.date}${ev.time ? ' ' + ev.time : ''}</span>` : ''}
+            ${ev.venue ? `<span>📍 ${esc(ev.venue)}</span>` : ''}
+            ${ev.fee ? `<span>💴 ¥${Number(ev.fee).toLocaleString()}</span>` : '<span>💴 無料</span>'}
+            <span>👥 ${totalPpl}名申込 / 入金済${paid}名</span>
+            ${ev.capacity > 0 ? `<span>定員${ev.capacity}名</span>` : ''}
+          </div>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-primary" onclick="showPage('participants','${id}')">参加者管理</button>
+          <button class="btn btn-sm btn-outline" onclick="openEventModal('${id}')">編集</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteEvent('${id}')">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ==================== EVENT MODAL ====================
+function openEventModal(id) {
+  editingEventId = id || null;
+  document.getElementById('eventModalTitle').textContent = id ? 'イベント編集' : '新規イベント作成';
+  const f = id ? allEvents[id] : {};
+  document.getElementById('evName').value = f.name || '';
+  document.getElementById('evDate').value = f.date || '';
+  document.getElementById('evTime').value = f.time || '';
+  document.getElementById('evVenue').value = f.venue || '';
+  document.getElementById('evFee').value = f.fee || '';
+  document.getElementById('evCapacity').value = f.capacity || 0;
+  document.getElementById('evBankInfo').value = f.bankInfo || '';
+  document.getElementById('evPaypayInfo').value = f.paypayInfo || '';
+  document.getElementById('evDesc').value = f.desc || '';
+  document.getElementById('evCompanionMode').value = f.companionMode || 'none';
+  document.getElementById('evAddressMode').value = f.addressMode || 'none';
+  document.getElementById('evGenderMode').value = f.genderMode || 'none';
+  document.getElementById('evGenderOptions').value = f.genderOptions || 'standard';
+  document.getElementById('evReferrerMode').value = f.referrerMode || 'none';
+  document.getElementById('evReferrerLabel').value = f.referrerLabel || 'ご紹介者のお名前';
+  document.getElementById('evStatus').value = f.status || 'open';
+  document.getElementById('eventModal').classList.add('open');
+}
+
+function closeEventModal() {
+  document.getElementById('eventModal').classList.remove('open');
+}
+
+async function saveEvent() {
+  const name = document.getElementById('evName').value.trim();
+  if (!name) { showToast('イベント名を入力してください', 'error'); return; }
+
+  const data = {
+    name,
+    date: document.getElementById('evDate').value,
+    time: document.getElementById('evTime').value,
+    venue: document.getElementById('evVenue').value.trim(),
+    fee: document.getElementById('evFee').value || '0',
+    capacity: parseInt(document.getElementById('evCapacity').value) || 0,
+    bankInfo: document.getElementById('evBankInfo').value.trim(),
+    paypayInfo: document.getElementById('evPaypayInfo').value.trim(),
+    desc: document.getElementById('evDesc').value.trim(),
+    companionMode: document.getElementById('evCompanionMode').value,
+    addressMode: document.getElementById('evAddressMode').value,
+    genderMode: document.getElementById('evGenderMode').value,
+    genderOptions: document.getElementById('evGenderOptions').value,
+    referrerMode: document.getElementById('evReferrerMode').value,
+    referrerLabel: document.getElementById('evReferrerLabel').value.trim() || 'ご紹介者のお名前',
+    status: document.getElementById('evStatus').value,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!editingEventId) data.createdAt = new Date().toISOString();
+
+  try {
+    if (window._firebaseReady) {
+      const db = window._db;
+      const ref = window._dbRef;
+      if (editingEventId) {
+        await window._dbUpdate(ref(db, `events/${editingEventId}`), data);
+      } else {
+        const newRef = await window._dbPush(ref(db, 'events'), data);
+      }
+    } else {
+      // localStorage fallback
+      const id = editingEventId || 'ev_' + Date.now();
+      allEvents[id] = data;
+      renderEventList();
+    }
+    closeEventModal();
+    showToast(editingEventId ? 'イベントを更新しました ✓' : 'イベントを作成しました ✓', 'success');
+  } catch(e) {
+    showToast('保存に失敗しました: ' + e.message, 'error');
+  }
+}
+
+async function deleteEvent(id) {
+  if (!confirm(`「${allEvents[id]?.name}」を削除しますか？\n参加者データも削除されます。`)) return;
+  try {
+    if (window._firebaseReady) {
+      const db = window._db;
+      const ref = window._dbRef;
+      await window._dbRemove(ref(db, `events/${id}`));
+      await window._dbRemove(ref(db, `registrations/${id}`));
+    } else {
+      delete allEvents[id];
+      delete allRegs[id];
+      renderEventList();
+    }
+    showToast('削除しました', 'success');
+  } catch(e) {
+    showToast('削除に失敗しました', 'error');
+  }
+}
+
+// ==================== PARTICIPANTS ====================
+function renderParticipants(eventId) {
+  const ev = allEvents[eventId];
+  if (!ev) return;
+
+  document.getElementById('ptEventTitle').textContent = ev.name;
+  document.getElementById('ptEventSub').textContent = ev.date || 'Participants';
+
+  const regs = Object.entries(allRegs[eventId] || {});
+  const totalApplicants = regs.length;
+  const totalPpl = regs.reduce((s, [,r]) => s + (r.totalCount || 1), 0);
+  const paid = regs.filter(([,r]) => r.paymentStatus === 'paid').length;
+  const paidAmt = paid * (parseInt(ev.fee) || 0);
+
+  document.getElementById('ptStats').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${totalApplicants}</div><div class="stat-label">申込件数</div></div>
+    <div class="stat-card"><div class="stat-num">${totalPpl}</div><div class="stat-label">参加人数（合計）</div></div>
+    <div class="stat-card"><div class="stat-num">${paid}</div><div class="stat-label">入金済み</div></div>
+    <div class="stat-card"><div class="stat-num">¥${paidAmt.toLocaleString()}</div><div class="stat-label">入金合計</div></div>
+  `;
+
+  const tbody = document.getElementById('ptTableBody');
+  if (regs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--ink-light);">まだ申し込みはありません</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = regs.map(([rid, r], i) => {
+    const paidCls = r.paymentStatus === 'paid' ? 'paid-yes' : r.paymentStatus === 'waived' ? 'paid-yes' : 'paid-no';
+    const paidTxt = r.paymentStatus === 'paid' ? '✓ 入金済' : r.paymentStatus === 'waived' ? '免除' : '未入金';
+    const companions = (r.companions || []).join('、') || '-';
+    return `
+      <tr>
+        <td>${i+1}</td>
+        <td>${esc(r.name)}</td>
+        <td><a href="mailto:${esc(r.email)}" style="color:var(--blue);">${esc(r.email)}</a></td>
+        <td>${esc(r.tel || '-')}</td>
+        <td style="white-space:nowrap;">${esc(r.gender || '-')}</td>
+        <td style="max-width:160px;font-size:12px;">${r.postal ? esc(r.postal) + '<br>' : ''}${esc(r.address || '-')}${r.address2 ? '<br>' + esc(r.address2) : ''}</td>
+        <td>${esc(r.referrer || '-')}</td>
+        <td>${r.totalCount || 1}名</td>
+        <td style="max-width:120px;font-size:12px;">${esc(companions)}</td>
+        <td>${r.paymentMethod === 'bank' ? '🏦 振込' : '📱 PayPay'}</td>
+        <td class="${paidCls}">${paidTxt}${r.paymentNote ? '<br><span style="font-size:11px;color:var(--ink-light);">' + esc(r.paymentNote) + '</span>' : ''}</td>
+        <td style="white-space:nowrap;font-size:12px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP') : '-'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="openPaymentModal('${rid}','${r.name}','${r.paymentStatus || 'pending'}','${r.paymentNote || ''}')">入金更新</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+// ==================== PAYMENT MODAL ====================
+function openPaymentModal(rid, name, status, note) {
+  editingRegId = rid;
+  document.getElementById('paymentModalName').textContent = name + ' 様';
+  document.getElementById('paymentStatus').value = status || 'pending';
+  document.getElementById('paymentNote').value = note || '';
+  document.getElementById('paymentModal').classList.add('open');
+}
+function closePaymentModal() {
+  document.getElementById('paymentModal').classList.remove('open');
+}
+async function updatePayment() {
+  const status = document.getElementById('paymentStatus').value;
+  const note = document.getElementById('paymentNote').value.trim();
+  try {
+    if (window._firebaseReady) {
+      await window._dbUpdate(window._dbRef(window._db, `registrations/${currentEventId}/${editingRegId}`), { paymentStatus: status, paymentNote: note });
+    } else {
+      if (allRegs[currentEventId]?.[editingRegId]) {
+        allRegs[currentEventId][editingRegId].paymentStatus = status;
+        allRegs[currentEventId][editingRegId].paymentNote = note;
+        renderParticipants(currentEventId);
+      }
+    }
+    closePaymentModal();
+    showToast('入金ステータスを更新しました ✓', 'success');
+  } catch(e) {
+    showToast('更新に失敗しました', 'error');
+  }
+}
+
+// ==================== PUBLIC FORM ====================
+function openPublicForm() {
+  showPage('public', currentEventId);
+}
+
+function renderPublicForm(eventId) {
+  const ev = allEvents[eventId];
+  if (!ev) {
+    document.getElementById('pubFormArea').innerHTML = '<p style="text-align:center;color:var(--red);">イベントが見つかりません</p>';
+    return;
+  }
+
+  document.getElementById('pubEventName').textContent = ev.name;
+
+  // 残席計算
+  const regs = Object.values(allRegs[eventId] || {});
+  const usedCount = regs.reduce((s, r) => s + (r.totalCount || 1), 0);
+  const remaining = ev.capacity > 0 ? ev.capacity - usedCount : null;
+
+  let capacityBadge = '';
+  if (remaining !== null) {
+    if (remaining <= 0) {
+      capacityBadge = `<span style="display:inline-block;margin-top:14px;padding:4px 16px;border-radius:20px;background:rgba(192,57,43,0.25);color:#ff8a80;border:1px solid rgba(192,57,43,0.5);font-size:12px;font-weight:500;">満席</span>`;
+    } else if (remaining <= 3) {
+      capacityBadge = `<span style="display:inline-block;margin-top:14px;padding:4px 16px;border-radius:20px;background:rgba(230,81,0,0.2);color:#ffb74d;border:1px solid rgba(230,81,0,0.4);font-size:12px;font-weight:500;">残り ${remaining} 席</span>`;
+    } else {
+      capacityBadge = `<span style="display:inline-block;margin-top:14px;padding:4px 16px;border-radius:20px;background:rgba(45,106,79,0.25);color:#69f0ae;border:1px solid rgba(45,106,79,0.5);font-size:12px;font-weight:500;">残り ${remaining} 席</span>`;
+    }
+  }
+
+  const metaItems = [
+    ev.date ? `<span>📅 ${ev.date}${ev.time ? ' ' + ev.time : ''}</span>` : '',
+    ev.venue ? `<span>📍 ${esc(ev.venue)}</span>` : '',
+    ev.fee > 0 ? `<span>💴 ¥${Number(ev.fee).toLocaleString()}</span>` : '<span>💴 無料</span>',
+  ].filter(Boolean).join('');
+
+  document.getElementById('pubEventMeta').innerHTML = metaItems + (capacityBadge ? `<div style="width:100%;text-align:center;">${capacityBadge}</div>` : '');
+
+  if (ev.status === 'closed' || remaining === 0) {
+    document.getElementById('pubFormArea').innerHTML = `<div style="text-align:center;padding:32px;color:var(--red);">${remaining === 0 ? '申し訳ございません。定員に達したため受付を終了しました。' : 'このイベントの申し込み受付は終了しました。'}</div>`;
+    return;
+  }
+
+  const companionSection = ev.companionMode !== 'none' ? `
+    <div class="form-group">
+      <label>参加人数 <span class="req">*</span></label>
+      <select id="pubCount" onchange="updateCompanionFields('${eventId}')">
+        ${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}">${n}名</option>`).join('')}
+      </select>
+    </div>
+    ${ev.companionMode === 'names' ? `<div class="form-group" id="companionNamesGroup" style="margin-top:8px;display:none;">
+      <label>同伴者のお名前</label>
+      <div id="companionNamesArea"></div>
+    </div>` : ''}
+  ` : '';
+
+  // 性別の選択肢
+  const genderChoices = {
+    standard: ['男性', '女性', 'その他'],
+    simple:   ['男性', '女性'],
+    full:     ['男性', '女性', 'その他', '回答しない']
+  }[ev.genderOptions || 'standard'];
+
+  const genderSection = ev.genderMode && ev.genderMode !== 'none' ? `
+    <div class="form-group">
+      <label>性別 ${ev.genderMode === 'required' ? '<span class="req">*</span>' : '<span style="font-size:11px;color:var(--ink-light);">（任意）</span>'}</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+        ${genderChoices.map(g => `
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="pubGender" value="${g}" style="accent-color:var(--gold);width:auto;">
+            ${g}
+          </label>`).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  const addressSection = ev.addressMode && ev.addressMode !== 'none' ? `
+    <div class="form-group span2">
+      <label>住所 ${ev.addressMode === 'required' ? '<span class="req">*</span>' : '<span style="font-size:11px;color:var(--ink-light);">（任意）</span>'}</label>
+      <input type="text" id="pubPostal" placeholder="郵便番号（例：123-4567）" style="margin-bottom:8px;">
+      <input type="text" id="pubAddress" placeholder="都道府県・市区町村・番地">
+      <input type="text" id="pubAddress2" placeholder="マンション名・部屋番号など（任意）" style="margin-top:8px;">
+    </div>
+  ` : '';
+
+  const referrerLabel = ev.referrerLabel || 'ご紹介者のお名前';
+  const referrerSection = ev.referrerMode && ev.referrerMode !== 'none' ? `
+    <div class="form-group span2">
+      <label>${esc(referrerLabel)} ${ev.referrerMode === 'required' ? '<span class="req">*</span>' : '<span style="font-size:11px;color:var(--ink-light);">（任意）</span>'}</label>
+      <input type="text" id="pubReferrer" placeholder="例：山田 花子">
+    </div>
+  ` : '';
+
+  const paymentSection = (ev.bankInfo || ev.paypayInfo) ? `
+    <hr class="form-divider">
+    <div class="form-group">
+      <label>お支払い方法 <span class="req">*</span></label>
+      <div class="payment-options">
+        ${ev.bankInfo ? `<label class="payment-option selected" id="optBank">
+          <input type="radio" name="payMethod" value="bank" checked onchange="togglePayInfo()">
+          🏦 <span class="method-name">銀行振込</span>
+        </label>` : ''}
+        ${ev.paypayInfo ? `<label class="payment-option ${!ev.bankInfo ? 'selected' : ''}" id="optPaypay">
+          <input type="radio" name="payMethod" value="paypay" ${!ev.bankInfo ? 'checked' : ''} onchange="togglePayInfo()">
+          📱 <span class="method-name">PayPay</span>
+        </label>` : ''}
+      </div>
+    </div>
+    ${ev.bankInfo ? `<div class="payment-info-box" id="bankInfoBox"><strong>振込先：</strong><br><pre style="font-size:12px;white-space:pre-wrap;">${esc(ev.bankInfo)}</pre></div>` : ''}
+    ${ev.paypayInfo ? `<div class="payment-info-box" id="paypayInfoBox" style="display:none;">${esc(ev.paypayInfo)}</div>` : ''}
+  ` : '';
+
+  document.getElementById('pubFormArea').innerHTML = `
+    <div class="card">
+      <div class="form-grid">
+        <div class="form-group span2">
+          <label>お名前（代表者） <span class="req">*</span></label>
+          <input type="text" id="pubName" placeholder="山田 花子">
+        </div>
+        <div class="form-group span2">
+          <label>メールアドレス <span class="req">*</span></label>
+          <input type="email" id="pubEmail" placeholder="example@email.com">
+        </div>
+        <div class="form-group span2">
+          <label>電話番号</label>
+          <input type="tel" id="pubTel" placeholder="090-0000-0000">
+        </div>
+        ${genderSection}
+        ${addressSection}
+        ${referrerSection}
+        ${companionSection}
+        ${paymentSection}
+        <div class="form-group span2">
+          <label>備考・メッセージ</label>
+          <textarea id="pubMessage" placeholder="ご要望やご質問などがあればご記入ください"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:20px;">
+        <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;" onclick="submitForm('${eventId}')">申し込む →</button>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:11px;color:var(--ink-light);margin-top:12px;">申し込み後、確認メールをお送りします</p>
+    <div style="text-align:center;margin-top:16px;">
+      <button class="btn btn-outline btn-sm" onclick="showPage('participants','${eventId}')">← 管理画面に戻る</button>
+    </div>
+  `;
+
+  // 同伴者フィールド初期化
+  if (ev.companionMode !== 'none') {
+    updateCompanionFields(eventId);
+  }
+}
+
+function updateCompanionFields(eventId) {
+  const ev = allEvents[eventId];
+  if (!ev || ev.companionMode !== 'names') return;
+  const count = parseInt(document.getElementById('pubCount')?.value || 1);
+  const group = document.getElementById('companionNamesGroup');
+  const area = document.getElementById('companionNamesArea');
+  if (!group || !area) return;
+  if (count <= 1) { group.style.display = 'none'; return; }
+  group.style.display = 'block';
+  area.innerHTML = Array.from({length: count - 1}, (_, i) =>
+    `<input type="text" class="companion-name" placeholder="同伴者${i+1}のお名前" style="margin-bottom:8px;">`
+  ).join('');
+}
+
+function togglePayInfo() {
+  const method = document.querySelector('input[name="payMethod"]:checked')?.value;
+  const bankBox = document.getElementById('bankInfoBox');
+  const ppBox = document.getElementById('paypayInfoBox');
+  const optBank = document.getElementById('optBank');
+  const optPP = document.getElementById('optPaypay');
+  if (bankBox) bankBox.style.display = method === 'bank' ? 'block' : 'none';
+  if (ppBox) ppBox.style.display = method === 'paypay' ? 'block' : 'none';
+  if (optBank) optBank.classList.toggle('selected', method === 'bank');
+  if (optPP) optPP.classList.toggle('selected', method === 'paypay');
+}
+
+async function submitForm(eventId) {
+  const ev = allEvents[eventId];
+  const name = document.getElementById('pubName')?.value.trim();
+  const email = document.getElementById('pubEmail')?.value.trim();
+  const tel = document.getElementById('pubTel')?.value.trim();
+  const message = document.getElementById('pubMessage')?.value.trim();
+  const count = parseInt(document.getElementById('pubCount')?.value || 1);
+  const payMethod = document.querySelector('input[name="payMethod"]:checked')?.value || 'bank';
+
+  if (!name || !email) { showToast('お名前とメールアドレスは必須です', 'error'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('正しいメールアドレスを入力してください', 'error'); return; }
+
+  // 性別バリデーション
+  const gender = document.querySelector('input[name="pubGender"]:checked')?.value || '';
+  if (ev.genderMode === 'required' && !gender) { showToast('性別を選択してください', 'error'); return; }
+
+  // 住所バリデーション
+  const postal = document.getElementById('pubPostal')?.value.trim() || '';
+  const address = document.getElementById('pubAddress')?.value.trim() || '';
+  const address2 = document.getElementById('pubAddress2')?.value.trim() || '';
+  if (ev.addressMode === 'required' && !address) { showToast('住所を入力してください', 'error'); return; }
+
+  // 紹介者バリデーション
+  const referrer = document.getElementById('pubReferrer')?.value.trim() || '';
+  if (ev.referrerMode === 'required' && !referrer) { showToast(`${ev.referrerLabel || 'ご紹介者のお名前'}を入力してください`, 'error'); return; }
+
+  // 定員チェック
+  if (ev.capacity > 0) {
+    const regs = Object.values(allRegs[eventId] || {});
+    const total = regs.reduce((s, r) => s + (r.totalCount || 1), 0);
+    if (total + count > ev.capacity) {
+      showToast(`定員（${ev.capacity}名）に達しています`, 'error'); return;
+    }
+  }
+
+  const companions = ev.companionMode === 'names'
+    ? Array.from(document.querySelectorAll('.companion-name')).map(i => i.value.trim()).filter(Boolean)
+    : [];
+
+  const regData = {
+    name, email, tel, message,
+    gender: gender || '',
+    postal, address, address2,
+    referrer,
+    totalCount: count,
+    companions,
+    paymentMethod: payMethod,
+    paymentStatus: 'pending',
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    if (window._firebaseReady) {
+      await window._dbPush(window._dbRef(window._db, `registrations/${eventId}`), regData);
+    } else {
+      if (!allRegs[eventId]) allRegs[eventId] = {};
+      allRegs[eventId]['reg_' + Date.now()] = regData;
+    }
+
+    // EmailJS送信
+    if (appSettings.ejPublicKey && appSettings.ejServiceId && appSettings.ejTemplateId) {
+      const params = {
+        to_email: email,
+        to_name: name,
+        event_name: ev.name,
+        event_date: ev.date + (ev.time ? ' ' + ev.time : ''),
+        event_venue: ev.venue || '-',
+        fee: ev.fee > 0 ? '¥' + Number(ev.fee).toLocaleString() : '無料',
+        payment: payMethod === 'bank' ? '銀行振込' : 'PayPay',
+        companions: companions.join('、') || 'なし',
+        total_count: count + '名',
+        message: message || ''
+      };
+      await emailjs.send(appSettings.ejServiceId, appSettings.ejTemplateId, params);
+
+      if (appSettings.ejAdminTemplateId && appSettings.ejAdminEmail) {
+        await emailjs.send(appSettings.ejServiceId, appSettings.ejAdminTemplateId, { ...params, to_email: appSettings.ejAdminEmail });
+      }
+    }
+
+    // 完了画面
+    document.getElementById('pubFormArea').innerHTML = `
+      <div class="success-screen">
+        <div class="checkmark">✅</div>
+        <h2>お申し込みありがとうございます</h2>
+        <p>${esc(name)} 様のお申し込みを受け付けました。<br>
+        ${appSettings.ejTemplateId ? '確認メールをお送りしましたのでご確認ください。' : ''}</p>
+        ${payMethod === 'bank' && ev.bankInfo ? `
+        <div class="payment-info-box" style="text-align:left;margin-top:20px;">
+          <strong>お振込先</strong><br>
+          <pre style="font-size:12px;white-space:pre-wrap;">${esc(ev.bankInfo)}</pre>
+        </div>` : ''}
+        ${payMethod === 'paypay' && ev.paypayInfo ? `
+        <div class="payment-info-box" style="text-align:left;margin-top:20px;">
+          <strong>PayPayでのお支払い</strong><br>${esc(ev.paypayInfo)}
+        </div>` : ''}
+      </div>`;
+
+  } catch(e) {
+    showToast('エラーが発生しました: ' + e.message, 'error');
+  }
+}
+
+// ==================== LINK ====================
+function copyLink() {
+  const input = document.getElementById('publicUrl');
+  input.select();
+  navigator.clipboard.writeText(input.value).then(() => showToast('URLをコピーしました ✓', 'success'));
+}
+
+// ==================== QR CODE ====================
+function openQrModal() {
+  const url = document.getElementById('publicUrl').value;
+  if (!url) return;
+  const ev = allEvents[currentEventId];
+
+  document.getElementById('qrEventName').textContent = ev?.name || '';
+  document.getElementById('qrEventDate').textContent = ev?.date ? `📅 ${ev.date}${ev.time ? ' ' + ev.time : ''}` : '';
+  document.getElementById('qrUrlText').textContent = url;
+
+  const canvas = document.getElementById('qrCanvas');
+  QRCode.toCanvas(canvas, url, {
+    width: 220,
+    margin: 1,
+    color: { dark: '#1a1714', light: '#ffffff' }
+  }, err => { if (err) showToast('QR生成に失敗しました', 'error'); });
+
+  document.getElementById('qrModal').classList.add('open');
+}
+
+function closeQrModal() {
+  document.getElementById('qrModal').classList.remove('open');
+}
+
+function downloadQR() {
+  const canvas = document.getElementById('qrCanvas');
+  const ev = allEvents[currentEventId];
+  const fileName = (ev?.name || 'event').replace(/[\/\\:*?"<>|]/g, '_') + '_QR.png';
+
+  // イベント名入りの画像を生成
+  const out = document.createElement('canvas');
+  const padding = 24;
+  const titleH = 48;
+  out.width = canvas.width + padding * 2;
+  out.height = canvas.height + padding * 2 + titleH;
+  const ctx = out.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, out.width, out.height);
+
+  // タイトル
+  ctx.fillStyle = '#1a1714';
+  ctx.font = 'bold 14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(ev?.name || '', out.width / 2, padding + 18);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = '#777';
+  ctx.fillText(ev?.date || '', out.width / 2, padding + 36);
+
+  // QR
+  ctx.drawImage(canvas, padding, padding + titleH, canvas.width, canvas.height);
+
+  // ダウンロード
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png');
+  a.download = fileName;
+  a.click();
+  showToast('QRコードを保存しました ✓', 'success');
+}
+
+// Handle hash-based routing for public form
+window.addEventListener('hashchange', handleHash);
+window.addEventListener('load', handleHash);
+function handleHash() {
+  const hash = window.location.hash;
+  if (hash.startsWith('#form-')) {
+    const eventId = hash.replace('#form-', '');
+    // Wait for firebase
+    const tryShow = () => {
+      if (allEvents[eventId]) {
+        document.getElementById('mainNav').style.display = 'none';
+        showPage('public', eventId);
+      } else if (window._firebaseReady) {
+        setTimeout(tryShow, 500);
+      }
+    };
+    if (window._firebaseReady) tryShow();
+    else document.addEventListener('firebaseReady', tryShow);
+  }
+}
+
+// ==================== CSV ====================
+function exportCSV() {
+  const regs = Object.entries(allRegs[currentEventId] || {});
+  if (regs.length === 0) { showToast('データがありません', 'error'); return; }
+  const ev = allEvents[currentEventId];
+
+  const rows = [
+    ['#', '氏名', 'メール', '電話', '性別', '郵便番号', '住所', '住所2', '紹介者', '人数', '同伴者', '支払方法', '入金状況', 'メモ', '申込日時', 'メッセージ']
+  ];
+  regs.forEach(([, r], i) => {
+    rows.push([
+      i + 1,
+      r.name,
+      r.email,
+      r.tel || '',
+      r.gender || '',
+      r.postal || '',
+      r.address || '',
+      r.address2 || '',
+      r.referrer || '',
+      r.totalCount || 1,
+      (r.companions || []).join(' / '),
+      r.paymentMethod === 'bank' ? '振込' : 'PayPay',
+      r.paymentStatus === 'paid' ? '入金済' : r.paymentStatus === 'waived' ? '免除' : '未入金',
+      r.paymentNote || '',
+      r.createdAt ? new Date(r.createdAt).toLocaleString('ja-JP') : '',
+      r.message || ''
+    ]);
+  });
+
+  const csv = '\uFEFF' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${ev?.name || 'event'}_participants.csv`;
+  a.click();
+  showToast('CSVをダウンロードしました', 'success');
+}
+
+// ==================== UTILS ====================
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+</script>
+</body>
+</html>
