@@ -620,6 +620,7 @@ tbody tr:hover { background: var(--paper); }
       <div class="divider"></div>
       <div class="event-meta-row" id="pubEventMeta"></div>
     </div>
+    <div id="pubFlyerArea" style="text-align:center;margin-bottom:8px;"></div>
     <div id="pubFormArea"></div>
   </div>
 </div>
@@ -764,6 +765,27 @@ tbody tr:hover { background: var(--paper); }
           <label>説明・備考</label>
           <textarea id="evDesc" placeholder="イベントの詳細、注意事項など"></textarea>
         </div>
+        <div class="form-group span2">
+          <label>フライヤー画像</label>
+          <div id="flyerUploadArea" style="border:2px dashed var(--paper-dark);border-radius:var(--r);padding:20px;text-align:center;cursor:pointer;transition:border-color 0.2s;background:var(--paper);"
+            onclick="document.getElementById('evFlyer').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--gold)'"
+            ondragleave="this.style.borderColor='var(--paper-dark)'"
+            ondrop="handleFlyerDrop(event)">
+            <div id="flyerPreview" style="display:none;margin-bottom:12px;">
+              <img id="flyerImg" style="max-width:100%;max-height:180px;border-radius:4px;box-shadow:var(--shadow);">
+            </div>
+            <div id="flyerPlaceholder">
+              <div style="font-size:28px;margin-bottom:6px;">🖼</div>
+              <div style="font-size:13px;color:var(--ink-light);">クリックまたはドラッグ＆ドロップ</div>
+              <div style="font-size:11px;color:var(--paper-dark);margin-top:4px;">JPG / PNG / GIF（最大2MB）</div>
+            </div>
+            <input type="file" id="evFlyer" accept="image/*" style="display:none;" onchange="handleFlyerSelect(event)">
+          </div>
+          <div id="flyerActions" style="display:none;margin-top:8px;display:none;">
+            <button type="button" class="btn btn-sm btn-danger" onclick="clearFlyer()">🗑 フライヤーを削除</button>
+          </div>
+        </div>
         <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
           <label style="font-size:13px;color:var(--ink);margin-bottom:10px;display:block;">申し込みフォームの収集項目</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
@@ -867,6 +889,8 @@ let editingRegId = null;
 let appSettings = {};
 let allEvents = {};
 let allRegs = {};
+let currentFlyerBase64 = '';
+let flyerCleared = false;
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', () => {
@@ -974,22 +998,26 @@ function renderEventList() {
     const paid = regs.filter(r => r.paymentStatus === 'paid').length;
     const badgeCls = ev.status === 'open' ? 'badge-open' : ev.status === 'closed' ? 'badge-closed' : 'badge-draft';
     const badgeTxt = ev.status === 'open' ? '受付中' : ev.status === 'closed' ? '受付終了' : '下書き';
+    const flyerThumb = ev.flyer ? `<img src="${ev.flyer}" style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--paper-dark);flex-shrink:0;">` : '';
     return `
       <div class="card event-card">
-        <div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
-            <div class="event-title">${esc(ev.name)}</div>
-            <span class="badge ${badgeCls}">${badgeTxt}</span>
-          </div>
-          <div class="event-meta">
-            ${ev.date ? `<span>📅 ${ev.date}${ev.time ? ' ' + ev.time : ''}</span>` : ''}
-            ${ev.venue ? `<span>📍 ${esc(ev.venue)}</span>` : ''}
-            ${ev.fee ? `<span>💴 ¥${Number(ev.fee).toLocaleString()}</span>` : '<span>💴 無料</span>'}
-            <span>👥 ${totalPpl}名申込 / 入金済${paid}名</span>
-            ${ev.capacity > 0 ? `<span>定員${ev.capacity}名</span>` : ''}
+        <div style="display:flex;gap:14px;align-items:flex-start;">
+          ${flyerThumb}
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+              <div class="event-title">${esc(ev.name)}</div>
+              <span class="badge ${badgeCls}">${badgeTxt}</span>
+            </div>
+            <div class="event-meta">
+              ${ev.date ? `<span>📅 ${ev.date}${ev.time ? ' ' + ev.time : ''}</span>` : ''}
+              ${ev.venue ? `<span>📍 ${esc(ev.venue)}</span>` : ''}
+              ${ev.fee ? `<span>💴 ¥${Number(ev.fee).toLocaleString()}</span>` : '<span>💴 無料</span>'}
+              <span>👥 ${totalPpl}名申込 / 入金済${paid}名</span>
+              ${ev.capacity > 0 ? `<span>定員${ev.capacity}名</span>` : ''}
+            </div>
           </div>
         </div>
-        <div class="btn-group">
+        <div class="btn-group" style="margin-top:10px;">
           <button class="btn btn-sm btn-primary" onclick="showPage('participants','${id}')">参加者管理</button>
           <button class="btn btn-sm btn-outline" onclick="openEventModal('${id}')">編集</button>
           <button class="btn btn-sm btn-danger" onclick="deleteEvent('${id}')">削除</button>
@@ -1019,6 +1047,21 @@ function openEventModal(id) {
   document.getElementById('evReferrerMode').value = f.referrerMode || 'none';
   document.getElementById('evReferrerLabel').value = f.referrerLabel || 'ご紹介者のお名前';
   document.getElementById('evStatus').value = f.status || 'open';
+
+  // フライヤーリセット
+  currentFlyerBase64 = '';
+  flyerCleared = false;
+  if (f.flyer) {
+    document.getElementById('flyerImg').src = f.flyer;
+    document.getElementById('flyerPreview').style.display = 'block';
+    document.getElementById('flyerPlaceholder').style.display = 'none';
+    document.getElementById('flyerActions').style.display = 'block';
+  } else {
+    document.getElementById('flyerPreview').style.display = 'none';
+    document.getElementById('flyerPlaceholder').style.display = 'block';
+    document.getElementById('flyerActions').style.display = 'none';
+  }
+  document.getElementById('evFlyer').value = '';
   document.getElementById('eventModal').classList.add('open');
 }
 
@@ -1050,6 +1093,15 @@ async function saveEvent() {
     updatedAt: new Date().toISOString()
   };
 
+  // フライヤー画像（既存維持 or 新規）
+  if (currentFlyerBase64) {
+    data.flyer = currentFlyerBase64;
+  } else if (editingEventId && allEvents[editingEventId]?.flyer && !flyerCleared) {
+    data.flyer = allEvents[editingEventId].flyer;
+  } else {
+    data.flyer = '';
+  }
+
   if (!editingEventId) data.createdAt = new Date().toISOString();
 
   try {
@@ -1059,10 +1111,11 @@ async function saveEvent() {
       if (editingEventId) {
         await window._dbUpdate(ref(db, `events/${editingEventId}`), data);
       } else {
-        const newRef = await window._dbPush(ref(db, 'events'), data);
+        // ★修正: pushはPromiseを返さないのでset+pushKeyを使う
+        const newRef = window._dbPush(ref(db, 'events'));
+        await window._dbSet(newRef, data);
       }
     } else {
-      // localStorage fallback
       const id = editingEventId || 'ev_' + Date.now();
       allEvents[id] = data;
       renderEventList();
@@ -1189,6 +1242,12 @@ function renderPublicForm(eventId) {
   }
 
   document.getElementById('pubEventName').textContent = ev.name;
+
+  // フライヤー表示
+  const flyerHtml = ev.flyer
+    ? `<div style="margin-bottom:20px;"><img src="${ev.flyer}" style="max-width:100%;max-height:260px;object-fit:contain;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.3);"></div>`
+    : '';
+  document.getElementById('pubFlyerArea').innerHTML = flyerHtml;
 
   // 残席計算
   const regs = Object.values(allRegs[eventId] || {});
@@ -1456,6 +1515,46 @@ async function submitForm(eventId) {
   } catch(e) {
     showToast('エラーが発生しました: ' + e.message, 'error');
   }
+}
+
+// ==================== FLYER ====================
+function handleFlyerSelect(event) {
+  const file = event.target.files[0];
+  if (file) loadFlyerFile(file);
+}
+
+function handleFlyerDrop(event) {
+  event.preventDefault();
+  document.getElementById('flyerUploadArea').style.borderColor = 'var(--paper-dark)';
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadFlyerFile(file);
+}
+
+function loadFlyerFile(file) {
+  if (file.size > 2 * 1024 * 1024) {
+    showToast('画像は2MB以内にしてください', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentFlyerBase64 = e.target.result;
+    flyerCleared = false;
+    document.getElementById('flyerImg').src = currentFlyerBase64;
+    document.getElementById('flyerPreview').style.display = 'block';
+    document.getElementById('flyerPlaceholder').style.display = 'none';
+    document.getElementById('flyerActions').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearFlyer() {
+  currentFlyerBase64 = '';
+  flyerCleared = true;
+  document.getElementById('flyerImg').src = '';
+  document.getElementById('flyerPreview').style.display = 'none';
+  document.getElementById('flyerPlaceholder').style.display = 'block';
+  document.getElementById('flyerActions').style.display = 'none';
+  document.getElementById('evFlyer').value = '';
 }
 
 // ==================== LINK ====================
