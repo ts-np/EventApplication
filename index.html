@@ -1126,21 +1126,31 @@ function initFirebaseListeners() {
 
 // ==================== SETTINGS ====================
 function loadSettings() {
-  const s = localStorage.getItem('eventMgrSettings');
-  if (s) {
-    appSettings = JSON.parse(s);
-    if (appSettings.ejPublicKey) {
-      document.getElementById('ejPublicKey').value = appSettings.ejPublicKey;
-      document.getElementById('ejServiceId').value = appSettings.ejServiceId || '';
-      document.getElementById('ejTemplateId').value = appSettings.ejTemplateId || '';
-      document.getElementById('ejPaymentTemplateId').value = appSettings.ejPaymentTemplateId || '';
-      document.getElementById('ejReminderTemplateId').value = appSettings.ejReminderTemplateId || '';
-      document.getElementById('ejNoticeTemplateId').value = appSettings.ejNoticeTemplateId || '';
-      document.getElementById('ejAdminTemplateId').value = appSettings.ejAdminTemplateId || '';
-      document.getElementById('ejAdminEmail').value = appSettings.ejAdminEmail || '';
-      emailjs.init(appSettings.ejPublicKey);
-    }
-  }
+  // デフォルト設定（コードに埋め込み）
+  const defaults = {
+    ejPublicKey:       'MXutqvlZ_pBSuWZSK',
+    ejServiceId:       'service_p7pw2an',
+    ejTemplateId:      'template_9wlsxgf',
+    ejPaymentTemplateId:  '',
+    ejReminderTemplateId: '',
+    ejNoticeTemplateId:   '',
+    ejAdminTemplateId:    '',
+    ejAdminEmail:         '',
+  };
+
+  const saved = localStorage.getItem('eventMgrSettings');
+  appSettings = saved ? { ...defaults, ...JSON.parse(saved) } : { ...defaults };
+
+  document.getElementById('ejPublicKey').value          = appSettings.ejPublicKey;
+  document.getElementById('ejServiceId').value          = appSettings.ejServiceId;
+  document.getElementById('ejTemplateId').value         = appSettings.ejTemplateId;
+  document.getElementById('ejPaymentTemplateId').value  = appSettings.ejPaymentTemplateId || '';
+  document.getElementById('ejReminderTemplateId').value = appSettings.ejReminderTemplateId || '';
+  document.getElementById('ejNoticeTemplateId').value   = appSettings.ejNoticeTemplateId || '';
+  document.getElementById('ejAdminTemplateId').value    = appSettings.ejAdminTemplateId || '';
+  document.getElementById('ejAdminEmail').value         = appSettings.ejAdminEmail || '';
+
+  emailjs.init(appSettings.ejPublicKey);
 }
 
 function saveEmailSettings() {
@@ -1246,8 +1256,8 @@ function openEventModal(id) {
   const cb = document.getElementById('evPaymentInfoShow');
   cb.checked = showInfo;
   cb.disabled = false;
-  onPaymentInfoToggle();
-  // 別途連絡の場合の処理
+  const track = cb.closest('label').querySelector('.toggle-track');
+  track.classList.toggle('on', showInfo);
   if ((f.paymentTiming || 'anytime') === 'contact_later') onPaymentTimingChange();
   document.getElementById('evFormMessage').value = f.formMessage || '';
   document.getElementById('evEmailMessage').value = f.emailMessage || '';
@@ -1750,7 +1760,7 @@ function renderPublicForm(eventId) {
 
   // フォームメッセージ
   const formMessageHtml = ev.formMessage ? `
-    <div style="background:rgba(184,151,90,0.1);border-left:3px solid var(--gold);border-radius:0 var(--r) var(--r) 0;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--ink);">
+    <div style="background:rgba(255,255,255,0.12);border-left:3px solid var(--gold-light, #d4b483);border-radius:0 var(--r) var(--r) 0;padding:14px 18px;margin-bottom:16px;font-size:13px;line-height:1.9;color:#ffffff;">
       ${esc(ev.formMessage).replace(/\n/g,'<br>')}
     </div>` : '';
 
@@ -1942,12 +1952,8 @@ async function submitForm(eventId) {
 function onPaymentInfoToggle() {
   const cb = document.getElementById('evPaymentInfoShow');
   const track = cb.closest('label').querySelector('.toggle-track');
-  const bankGroup = document.getElementById('bankInfoGroup');
-  const paypayGroup = document.getElementById('paypayInfoGroup');
-  const isOn = cb.checked;
-  track.classList.toggle('on', isOn);
-  bankGroup.style.display = isOn ? '' : 'none';
-  paypayGroup.style.display = isOn ? '' : 'none';
+  track.classList.toggle('on', cb.checked);
+  // 振込先・PayPay欄は常に表示（連動しない）
 }
 
 function onPaymentTimingChange() {
@@ -1955,24 +1961,17 @@ function onPaymentTimingChange() {
   const cb = document.getElementById('evPaymentInfoShow');
   const track = cb.closest('label').querySelector('.toggle-track');
   const hint = document.getElementById('paymentInfoTimingHint');
-  const bankGroup = document.getElementById('bankInfoGroup');
-  const paypayGroup = document.getElementById('paypayInfoGroup');
 
   if (timing === 'contact_later') {
     cb.checked = false;
     cb.disabled = true;
     track.classList.remove('on');
-    bankGroup.style.display = 'none';
-    paypayGroup.style.display = 'none';
     hint.textContent = '「別途連絡」のため申し込み時は非表示になります。';
     hint.style.color = 'var(--gold)';
   } else {
     cb.disabled = false;
     hint.textContent = '';
-    const isOn = cb.checked;
-    track.classList.toggle('on', isOn);
-    bankGroup.style.display = isOn ? '' : 'none';
-    paypayGroup.style.display = isOn ? '' : 'none';
+    track.classList.toggle('on', cb.checked);
   }
 }
 
