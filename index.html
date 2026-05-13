@@ -515,6 +515,29 @@ tbody tr:hover { background: var(--paper); }
 }
 .payment-info-box strong { color: var(--ink); }
 
+/* ── TOGGLE SWITCH ── */
+.toggle-wrap { display:inline-flex; align-items:center; }
+.toggle-track {
+  width: 44px; height: 24px;
+  background: var(--paper-dark);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.toggle-track.on { background: var(--gold); }
+.toggle-thumb {
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle-track.on .toggle-thumb { transform: translateX(20px); }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 640px) {
   .page { padding: 20px 16px; }
@@ -793,24 +816,17 @@ tbody tr:hover { background: var(--paper); }
           <label>定員（0＝無制限）</label>
           <input type="number" id="evCapacity" placeholder="20" min="0">
         </div>
-        <div class="form-group span2">
-          <label>振込先情報</label>
-          <textarea id="evBankInfo" placeholder="銀行名：〇〇銀行&#10;支店名：〇〇支店&#10;口座番号：1234567&#10;名義：ヤマダ ハナコ"></textarea>
-        </div>
-        <div class="form-group span2">
-          <label>PayPay ID / 送金リンク</label>
-          <input type="text" id="evPaypayInfo" placeholder="例：PayPay ID: hanako_yamada">
-        </div>
         <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
-          <label style="font-size:13px;color:var(--ink);margin-bottom:4px;display:block;">💳 支払いタイミング・案内設定</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+          <label style="font-size:13px;color:var(--ink);margin-bottom:8px;display:block;">💳 支払い情報</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div class="form-group">
               <label>支払いタイミング</label>
-              <select id="evPaymentTiming">
+              <select id="evPaymentTiming" onchange="onPaymentTimingChange()">
                 <option value="anytime">申し込み後いつでも</option>
                 <option value="before_deadline">期日までに</option>
                 <option value="on_day">当日現地で</option>
                 <option value="after_event">イベント後</option>
+                <option value="contact_later">別途連絡</option>
               </select>
             </div>
             <div class="form-group" id="paymentDeadlineGroup">
@@ -818,16 +834,28 @@ tbody tr:hover { background: var(--paper); }
               <input type="date" id="evPaymentDeadline">
             </div>
             <div class="form-group span2">
-              <label>申し込み時の支払い情報の表示</label>
-              <select id="evPaymentInfoTiming">
-                <option value="immediate">申し込み時にフォーム・メールに表示する</option>
-                <option value="later">後で別途ご案内する（申し込み時は非表示）</option>
-              </select>
-              <span class="hint" id="paymentInfoTimingHint" style="margin-top:6px;display:block;"></span>
-            </div>
-            <div class="form-group span2">
               <label>支払い備考（メールに記載）</label>
               <input type="text" id="evPaymentNote" placeholder="例：イベント1週間前までにお振込みください">
+            </div>
+            <div class="form-group span2">
+              <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:500;">
+                <div class="toggle-wrap">
+                  <input type="checkbox" id="evPaymentInfoShow" onchange="onPaymentInfoToggle()" style="display:none;">
+                  <div class="toggle-track" onclick="document.getElementById('evPaymentInfoShow').click();onPaymentInfoToggle()">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </div>
+                申し込み時に支払い情報を表示する
+              </label>
+              <span class="hint" id="paymentInfoTimingHint" style="margin-top:4px;display:block;"></span>
+            </div>
+            <div class="form-group span2" id="bankInfoGroup">
+              <label>振込先情報</label>
+              <textarea id="evBankInfo" placeholder="銀行名：〇〇銀行&#10;支店名：〇〇支店&#10;口座番号：1234567&#10;名義：ヤマダ ハナコ"></textarea>
+            </div>
+            <div class="form-group span2" id="paypayInfoGroup">
+              <label>PayPay ID / 送金リンク</label>
+              <input type="text" id="evPaypayInfo" placeholder="例：PayPay ID: hanako_yamada">
             </div>
           </div>
         </div>
@@ -1212,8 +1240,15 @@ function openEventModal(id) {
   document.getElementById('evPaypayInfo').value = f.paypayInfo || '';
   document.getElementById('evPaymentTiming').value = f.paymentTiming || 'anytime';
   document.getElementById('evPaymentDeadline').value = f.paymentDeadline || '';
-  document.getElementById('evPaymentInfoTiming').value = f.paymentInfoTiming || 'immediate';
   document.getElementById('evPaymentNote').value = f.paymentNote || '';
+  // チェックボックス復元
+  const showInfo = f.paymentInfoTiming !== 'later';
+  const cb = document.getElementById('evPaymentInfoShow');
+  cb.checked = showInfo;
+  cb.disabled = false;
+  onPaymentInfoToggle();
+  // 別途連絡の場合の処理
+  if ((f.paymentTiming || 'anytime') === 'contact_later') onPaymentTimingChange();
   document.getElementById('evFormMessage').value = f.formMessage || '';
   document.getElementById('evEmailMessage').value = f.emailMessage || '';
   document.getElementById('evDesc').value = f.desc || '';
@@ -1261,7 +1296,7 @@ async function saveEvent() {
     paypayInfo: document.getElementById('evPaypayInfo').value.trim(),
     paymentTiming: document.getElementById('evPaymentTiming').value,
     paymentDeadline: document.getElementById('evPaymentDeadline').value,
-    paymentInfoTiming: document.getElementById('evPaymentInfoTiming').value,
+    paymentInfoTiming: document.getElementById('evPaymentInfoShow').checked ? 'immediate' : 'later',
     paymentNote: document.getElementById('evPaymentNote').value.trim(),
     formMessage: document.getElementById('evFormMessage').value.trim(),
     emailMessage: document.getElementById('evEmailMessage').value.trim(),
@@ -1505,8 +1540,10 @@ async function sendBulkEmail(type, timing) {
       anytime: '申し込み後いつでも',
       before_deadline: ev.paymentDeadline ? `${ev.paymentDeadline} までに` : '期日までに',
       on_day: '当日現地にて',
-      after_event: 'イベント終了後'
+      after_event: 'イベント終了後',
+      contact_later: '別途ご連絡いたします'
     };
+    const isLater = ev.paymentInfoTiming === 'later' || ev.paymentTiming === 'contact_later';
     const params = {
       to_email:        r.email,
       to_name:         r.name,
@@ -1517,10 +1554,9 @@ async function sendBulkEmail(type, timing) {
       payment:         r.paymentMethod === 'bank' ? '銀行振込' : 'PayPay',
       companions:      (r.companions || []).join('、') || 'なし',
       total_count:     (r.totalCount || 1) + '名',
-      bank_info:       ev.bankInfo || '',
-      paypay_info:     ev.paypayInfo || '',
-      payment_info_notice: ev.paymentInfoTiming === 'later' ? 'お支払い方法については後日改めてご案内いたします。' : '',
-      payment_timing:  timingMap[ev.paymentTiming || 'anytime'],
+      bank_info:       !isLater ? (ev.bankInfo || '') : '',
+      paypay_info:     !isLater ? (ev.paypayInfo || '') : '',
+      payment_info_notice: isLater ? 'お支払い方法については後日改めてご案内いたします。' : '',
       payment_note:    ev.paymentNote || '',
       custom_message:  ev.emailMessage || '',
       timing:          timing || '',
@@ -1684,7 +1720,7 @@ function renderPublicForm(eventId) {
       ${ev.paymentNote ? `<br><span style="color:var(--ink-light);font-size:12px;">${esc(ev.paymentNote)}</span>` : ''}
     </div>` : '';
 
-  const showPaymentNow = (ev.paymentInfoTiming !== 'later');
+  const showPaymentNow = (ev.paymentInfoTiming !== 'later' && ev.paymentTiming !== 'contact_later');
 
   const paymentSection = (ev.bankInfo || ev.paypayInfo) && showPaymentNow ? `
     <hr class="form-divider">
@@ -1851,8 +1887,10 @@ async function submitForm(eventId) {
         anytime: '申し込み後いつでも',
         before_deadline: ev.paymentDeadline ? `${ev.paymentDeadline} までに` : '期日までに',
         on_day: '当日現地にて',
-        after_event: 'イベント終了後'
+        after_event: 'イベント終了後',
+        contact_later: '別途ご連絡いたします'
       };
+      const isLater = ev.paymentInfoTiming === 'later' || ev.paymentTiming === 'contact_later';
       const params = {
         to_email: email,
         to_name: name,
@@ -1863,10 +1901,9 @@ async function submitForm(eventId) {
         payment: payMethod === 'bank' ? '銀行振込' : 'PayPay',
         companions: companions.join('、') || 'なし',
         total_count: count + '名',
-        bank_info: ev.paymentInfoTiming !== 'later' ? (ev.bankInfo || '') : '※ お支払い方法は後日ご案内いたします。',
-        paypay_info: ev.paymentInfoTiming !== 'later' ? (ev.paypayInfo || '') : '',
-        payment_info_notice: ev.paymentInfoTiming === 'later' ? 'お支払い方法については後日改めてご案内いたします。' : '',
-        payment_timing: timingMap[ev.paymentTiming || 'anytime'],
+        bank_info: !isLater ? (ev.bankInfo || '') : '',
+        paypay_info: !isLater ? (ev.paypayInfo || '') : '',
+        payment_info_notice: isLater ? 'お支払い方法については後日改めてご案内いたします。' : '',
         payment_note: ev.paymentNote || '',
         custom_message: ev.emailMessage || '',
         message: message || ''
@@ -1898,6 +1935,44 @@ async function submitForm(eventId) {
 
   } catch(e) {
     showToast('エラーが発生しました: ' + e.message, 'error');
+  }
+}
+
+// ==================== PAYMENT TIMING ====================
+function onPaymentInfoToggle() {
+  const cb = document.getElementById('evPaymentInfoShow');
+  const track = cb.closest('label').querySelector('.toggle-track');
+  const bankGroup = document.getElementById('bankInfoGroup');
+  const paypayGroup = document.getElementById('paypayInfoGroup');
+  const isOn = cb.checked;
+  track.classList.toggle('on', isOn);
+  bankGroup.style.display = isOn ? '' : 'none';
+  paypayGroup.style.display = isOn ? '' : 'none';
+}
+
+function onPaymentTimingChange() {
+  const timing = document.getElementById('evPaymentTiming').value;
+  const cb = document.getElementById('evPaymentInfoShow');
+  const track = cb.closest('label').querySelector('.toggle-track');
+  const hint = document.getElementById('paymentInfoTimingHint');
+  const bankGroup = document.getElementById('bankInfoGroup');
+  const paypayGroup = document.getElementById('paypayInfoGroup');
+
+  if (timing === 'contact_later') {
+    cb.checked = false;
+    cb.disabled = true;
+    track.classList.remove('on');
+    bankGroup.style.display = 'none';
+    paypayGroup.style.display = 'none';
+    hint.textContent = '「別途連絡」のため申し込み時は非表示になります。';
+    hint.style.color = 'var(--gold)';
+  } else {
+    cb.disabled = false;
+    hint.textContent = '';
+    const isOn = cb.checked;
+    track.classList.toggle('on', isOn);
+    bankGroup.style.display = isOn ? '' : 'none';
+    paypayGroup.style.display = isOn ? '' : 'none';
   }
 }
 
