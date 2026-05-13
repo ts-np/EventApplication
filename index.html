@@ -585,6 +585,32 @@ tbody tr:hover { background: var(--paper); }
     </div>
   </div>
 
+  <!-- メール送信パネル -->
+  <div class="card" style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--ink);">📧 メール送信</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;">
+      <div style="border:1px solid var(--paper-dark);border-radius:var(--r);padding:14px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">② お支払い依頼</div>
+        <div style="font-size:11px;color:var(--ink-light);margin-bottom:10px;">未入金の方に振込・PayPay案内を送信</div>
+        <button class="btn btn-sm btn-outline" style="width:100%;justify-content:center;" onclick="sendBulkEmail('payment')">未入金者に送信</button>
+      </div>
+      <div style="border:1px solid var(--paper-dark);border-radius:var(--r);padding:14px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">③ お支払い督促</div>
+        <div style="font-size:11px;color:var(--ink-light);margin-bottom:10px;">入金期限を過ぎた方に督促メールを送信</div>
+        <button class="btn btn-sm btn-outline" style="width:100%;justify-content:center;" onclick="sendBulkEmail('reminder')">未入金者に送信</button>
+      </div>
+      <div style="border:1px solid var(--paper-dark);border-radius:var(--r);padding:14px;">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">④ 開催案内</div>
+        <div style="font-size:11px;color:var(--ink-light);margin-bottom:10px;">全参加者に開催日時・会場をご案内</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center;font-size:11px;" onclick="sendBulkEmail('notice','2週間前')">2週間前</button>
+          <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center;font-size:11px;" onclick="sendBulkEmail('notice','3日前')">3日前</button>
+          <button class="btn btn-sm btn-primary" style="flex:1;justify-content:center;font-size:11px;" onclick="sendBulkEmail('notice','前日')">前日</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="table-wrap">
       <table id="ptTable">
@@ -646,8 +672,20 @@ tbody tr:hover { background: var(--paper); }
         <input type="text" id="ejServiceId" placeholder="service_xxxxxxx">
       </div>
       <div class="form-group">
-        <label>Template ID（参加者確認メール）</label>
+        <label>① 申し込み確認メール Template ID</label>
         <input type="text" id="ejTemplateId" placeholder="template_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>② 支払い依頼メール Template ID</label>
+        <input type="text" id="ejPaymentTemplateId" placeholder="template_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>③ 支払い督促メール Template ID</label>
+        <input type="text" id="ejReminderTemplateId" placeholder="template_xxxxxxx">
+      </div>
+      <div class="form-group">
+        <label>④ 開催案内メール Template ID</label>
+        <input type="text" id="ejNoticeTemplateId" placeholder="template_xxxxxxx">
       </div>
       <div class="form-group">
         <label>管理者通知テンプレートID（任意）</label>
@@ -662,16 +700,18 @@ tbody tr:hover { background: var(--paper); }
       <button class="btn btn-primary" onclick="saveEmailSettings()">保存</button>
     </div>
     <div style="margin-top:20px;">
-      <div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">EmailJS テンプレート変数（参加者向け）</div>
+      <div style="font-size:12px;color:var(--ink-light);margin-bottom:8px;">EmailJS テンプレート変数（共通）</div>
       <div class="code-block">{{to_email}}     → 参加者メール
 {{to_name}}      → 参加者氏名
 {{event_name}}   → イベント名
-{{event_date}}   → 開催日
+{{event_date}}   → 開催日時
 {{event_venue}}  → 会場
 {{fee}}          → 参加費
 {{payment}}      → 支払い方法
 {{companions}}   → 同伴者名
-{{total_count}}  → 合計人数</div>
+{{total_count}}  → 合計人数
+{{bank_info}}    → 振込先情報（②③で使用）
+{{paypay_info}}  → PayPay情報（②③で使用）</div>
     </div>
   </div>
 
@@ -761,9 +801,46 @@ tbody tr:hover { background: var(--paper); }
           <label>PayPay ID / 送金リンク</label>
           <input type="text" id="evPaypayInfo" placeholder="例：PayPay ID: hanako_yamada">
         </div>
+        <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
+          <label style="font-size:13px;color:var(--ink);margin-bottom:4px;display:block;">💳 支払いタイミング</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
+            <div class="form-group">
+              <label>支払いタイミング</label>
+              <select id="evPaymentTiming">
+                <option value="anytime">申し込み後いつでも</option>
+                <option value="before_deadline">期日までに</option>
+                <option value="on_day">当日現地で</option>
+                <option value="after_event">イベント後</option>
+              </select>
+            </div>
+            <div class="form-group" id="paymentDeadlineGroup">
+              <label>支払い期日</label>
+              <input type="date" id="evPaymentDeadline">
+            </div>
+            <div class="form-group span2">
+              <label>支払い備考（メールに記載）</label>
+              <input type="text" id="evPaymentNote" placeholder="例：イベント1週間前までにお振込みください">
+            </div>
+          </div>
+        </div>
+        <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
+          <label style="font-size:13px;color:var(--ink);margin-bottom:4px;display:block;">✉️ 参加者へのメッセージ</label>
+          <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:8px;">
+            <div class="form-group">
+              <label>申し込みフォームに表示するメッセージ</label>
+              <textarea id="evFormMessage" placeholder="例：ご参加いただきありがとうございます。当日は動きやすい服装でお越しください。" style="min-height:80px;"></textarea>
+              <span class="hint">申し込みフォームの上部に表示されます</span>
+            </div>
+            <div class="form-group">
+              <label>確認メールに追加するメッセージ</label>
+              <textarea id="evEmailMessage" placeholder="例：当日は10分前にお越しいただけますと幸いです。駐車場はございませんので公共交通機関をご利用ください。" style="min-height:80px;"></textarea>
+              <span class="hint">申し込み確認メールの本文末尾に追加されます（{{custom_message}}変数で使用）</span>
+            </div>
+          </div>
+        </div>
         <div class="form-group span2">
-          <label>説明・備考</label>
-          <textarea id="evDesc" placeholder="イベントの詳細、注意事項など"></textarea>
+          <label>説明・備考（内部メモ）</label>
+          <textarea id="evDesc" placeholder="管理者用のメモ。参加者には表示されません。"></textarea>
         </div>
         <div class="form-group span2">
           <label>フライヤー画像</label>
@@ -881,8 +958,86 @@ tbody tr:hover { background: var(--paper); }
   </div>
 </div>
 
-<script>
-// ==================== STATE ====================
+<!-- ========== MODAL: 参加者情報編集 ========== -->
+<div class="modal-overlay" id="editRegModal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div class="modal-title">参加者情報の編集</div>
+      <button class="modal-close" onclick="closeEditRegModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group span2">
+          <label>氏名 <span class="req">*</span></label>
+          <input type="text" id="erName">
+        </div>
+        <div class="form-group span2">
+          <label>メールアドレス <span class="req">*</span></label>
+          <input type="email" id="erEmail">
+        </div>
+        <div class="form-group">
+          <label>電話番号</label>
+          <input type="tel" id="erTel">
+        </div>
+        <div class="form-group">
+          <label>性別</label>
+          <input type="text" id="erGender" placeholder="男性／女性／その他">
+        </div>
+        <div class="form-group">
+          <label>郵便番号</label>
+          <input type="text" id="erPostal">
+        </div>
+        <div class="form-group">
+          <label>住所</label>
+          <input type="text" id="erAddress">
+        </div>
+        <div class="form-group span2">
+          <label>住所2（建物名など）</label>
+          <input type="text" id="erAddress2">
+        </div>
+        <div class="form-group span2">
+          <label>紹介者</label>
+          <input type="text" id="erReferrer">
+        </div>
+        <div class="form-group">
+          <label>参加人数</label>
+          <input type="number" id="erCount" min="1" max="20">
+        </div>
+        <div class="form-group">
+          <label>支払い方法</label>
+          <select id="erPaymentMethod">
+            <option value="bank">🏦 銀行振込</option>
+            <option value="paypay">📱 PayPay</option>
+          </select>
+        </div>
+        <div class="form-group span2">
+          <label>同伴者名（カンマ区切り）</label>
+          <input type="text" id="erCompanions" placeholder="例：山田 太郎, 鈴木 花子">
+        </div>
+        <div class="form-group span2">
+          <label>備考・メッセージ</label>
+          <textarea id="erMessage"></textarea>
+        </div>
+        <div class="form-group">
+          <label>入金状況</label>
+          <select id="erPaymentStatus">
+            <option value="pending">未入金</option>
+            <option value="paid">入金済み</option>
+            <option value="waived">免除</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>入金メモ</label>
+          <input type="text" id="erPaymentNote" placeholder="入金日など">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEditRegModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEditReg()">保存</button>
+    </div>
+  </div>
+</div>
 let currentEventId = null;
 let editingEventId = null;
 let editingRegId = null;
@@ -940,6 +1095,9 @@ function loadSettings() {
       document.getElementById('ejPublicKey').value = appSettings.ejPublicKey;
       document.getElementById('ejServiceId').value = appSettings.ejServiceId || '';
       document.getElementById('ejTemplateId').value = appSettings.ejTemplateId || '';
+      document.getElementById('ejPaymentTemplateId').value = appSettings.ejPaymentTemplateId || '';
+      document.getElementById('ejReminderTemplateId').value = appSettings.ejReminderTemplateId || '';
+      document.getElementById('ejNoticeTemplateId').value = appSettings.ejNoticeTemplateId || '';
       document.getElementById('ejAdminTemplateId').value = appSettings.ejAdminTemplateId || '';
       document.getElementById('ejAdminEmail').value = appSettings.ejAdminEmail || '';
       emailjs.init(appSettings.ejPublicKey);
@@ -951,6 +1109,9 @@ function saveEmailSettings() {
   appSettings.ejPublicKey = document.getElementById('ejPublicKey').value.trim();
   appSettings.ejServiceId = document.getElementById('ejServiceId').value.trim();
   appSettings.ejTemplateId = document.getElementById('ejTemplateId').value.trim();
+  appSettings.ejPaymentTemplateId = document.getElementById('ejPaymentTemplateId').value.trim();
+  appSettings.ejReminderTemplateId = document.getElementById('ejReminderTemplateId').value.trim();
+  appSettings.ejNoticeTemplateId = document.getElementById('ejNoticeTemplateId').value.trim();
   appSettings.ejAdminTemplateId = document.getElementById('ejAdminTemplateId').value.trim();
   appSettings.ejAdminEmail = document.getElementById('ejAdminEmail').value.trim();
   localStorage.setItem('eventMgrSettings', JSON.stringify(appSettings));
@@ -1039,6 +1200,11 @@ function openEventModal(id) {
   document.getElementById('evCapacity').value = f.capacity || 0;
   document.getElementById('evBankInfo').value = f.bankInfo || '';
   document.getElementById('evPaypayInfo').value = f.paypayInfo || '';
+  document.getElementById('evPaymentTiming').value = f.paymentTiming || 'anytime';
+  document.getElementById('evPaymentDeadline').value = f.paymentDeadline || '';
+  document.getElementById('evPaymentNote').value = f.paymentNote || '';
+  document.getElementById('evFormMessage').value = f.formMessage || '';
+  document.getElementById('evEmailMessage').value = f.emailMessage || '';
   document.getElementById('evDesc').value = f.desc || '';
   document.getElementById('evCompanionMode').value = f.companionMode || 'none';
   document.getElementById('evAddressMode').value = f.addressMode || 'none';
@@ -1082,6 +1248,11 @@ async function saveEvent() {
     capacity: parseInt(document.getElementById('evCapacity').value) || 0,
     bankInfo: document.getElementById('evBankInfo').value.trim(),
     paypayInfo: document.getElementById('evPaypayInfo').value.trim(),
+    paymentTiming: document.getElementById('evPaymentTiming').value,
+    paymentDeadline: document.getElementById('evPaymentDeadline').value,
+    paymentNote: document.getElementById('evPaymentNote').value.trim(),
+    formMessage: document.getElementById('evFormMessage').value.trim(),
+    emailMessage: document.getElementById('evEmailMessage').value.trim(),
     desc: document.getElementById('evDesc').value.trim(),
     companionMode: document.getElementById('evCompanionMode').value,
     addressMode: document.getElementById('evAddressMode').value,
@@ -1192,13 +1363,171 @@ function renderParticipants(eventId) {
         <td class="${paidCls}">${paidTxt}${r.paymentNote ? '<br><span style="font-size:11px;color:var(--ink-light);">' + esc(r.paymentNote) + '</span>' : ''}</td>
         <td style="white-space:nowrap;font-size:12px;">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('ja-JP') : '-'}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="openPaymentModal('${rid}','${r.name}','${r.paymentStatus || 'pending'}','${r.paymentNote || ''}')">入金更新</button>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-outline" onclick="openEditRegModal('${rid}')">編集</button>
+            <button class="btn btn-sm btn-outline" onclick="openPaymentModal('${rid}','${r.name}','${r.paymentStatus || 'pending'}','${r.paymentNote || ''}')">入金</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteReg('${rid}')">削除</button>
+          </div>
         </td>
       </tr>`;
   }).join('');
 }
 
-// ==================== PAYMENT MODAL ====================
+// ==================== 参加者編集 ====================
+function openEditRegModal(rid) {
+  const r = allRegs[currentEventId]?.[rid];
+  if (!r) return;
+  editingRegId = rid;
+  document.getElementById('erName').value = r.name || '';
+  document.getElementById('erEmail').value = r.email || '';
+  document.getElementById('erTel').value = r.tel || '';
+  document.getElementById('erGender').value = r.gender || '';
+  document.getElementById('erPostal').value = r.postal || '';
+  document.getElementById('erAddress').value = r.address || '';
+  document.getElementById('erAddress2').value = r.address2 || '';
+  document.getElementById('erReferrer').value = r.referrer || '';
+  document.getElementById('erCount').value = r.totalCount || 1;
+  document.getElementById('erPaymentMethod').value = r.paymentMethod || 'bank';
+  document.getElementById('erCompanions').value = (r.companions || []).join(', ');
+  document.getElementById('erMessage').value = r.message || '';
+  document.getElementById('erPaymentStatus').value = r.paymentStatus || 'pending';
+  document.getElementById('erPaymentNote').value = r.paymentNote || '';
+  document.getElementById('editRegModal').classList.add('open');
+}
+
+function closeEditRegModal() {
+  document.getElementById('editRegModal').classList.remove('open');
+}
+
+async function saveEditReg() {
+  const name = document.getElementById('erName').value.trim();
+  const email = document.getElementById('erEmail').value.trim();
+  if (!name || !email) { showToast('氏名とメールは必須です', 'error'); return; }
+
+  const companionsRaw = document.getElementById('erCompanions').value;
+  const companions = companionsRaw ? companionsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const data = {
+    name, email,
+    tel: document.getElementById('erTel').value.trim(),
+    gender: document.getElementById('erGender').value.trim(),
+    postal: document.getElementById('erPostal').value.trim(),
+    address: document.getElementById('erAddress').value.trim(),
+    address2: document.getElementById('erAddress2').value.trim(),
+    referrer: document.getElementById('erReferrer').value.trim(),
+    totalCount: parseInt(document.getElementById('erCount').value) || 1,
+    paymentMethod: document.getElementById('erPaymentMethod').value,
+    companions,
+    message: document.getElementById('erMessage').value.trim(),
+    paymentStatus: document.getElementById('erPaymentStatus').value,
+    paymentNote: document.getElementById('erPaymentNote').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  try {
+    if (window._firebaseReady) {
+      await window._dbUpdate(window._dbRef(window._db, `registrations/${currentEventId}/${editingRegId}`), data);
+    } else {
+      allRegs[currentEventId][editingRegId] = { ...allRegs[currentEventId][editingRegId], ...data };
+      renderParticipants(currentEventId);
+    }
+    closeEditRegModal();
+    showToast('参加者情報を更新しました ✓', 'success');
+  } catch(e) {
+    showToast('更新に失敗しました: ' + e.message, 'error');
+  }
+}
+
+async function deleteReg(rid) {
+  const r = allRegs[currentEventId]?.[rid];
+  if (!confirm(`「${r?.name}」を削除しますか？`)) return;
+  try {
+    if (window._firebaseReady) {
+      await window._dbRemove(window._dbRef(window._db, `registrations/${currentEventId}/${rid}`));
+    } else {
+      delete allRegs[currentEventId][rid];
+      renderParticipants(currentEventId);
+    }
+    showToast('削除しました', 'success');
+  } catch(e) {
+    showToast('削除に失敗しました', 'error');
+  }
+}
+
+// ==================== メール一括送信 ====================
+async function sendBulkEmail(type, timing) {
+  const ev = allEvents[currentEventId];
+  if (!appSettings.ejPublicKey || !appSettings.ejServiceId) {
+    showToast('EmailJSの設定を完了してください', 'error'); return;
+  }
+
+  const templateIdMap = {
+    payment:  appSettings.ejPaymentTemplateId,
+    reminder: appSettings.ejReminderTemplateId,
+    notice:   appSettings.ejNoticeTemplateId,
+  };
+  const templateId = templateIdMap[type];
+  if (!templateId) {
+    showToast(`設定ページで「${type === 'payment' ? '支払依頼' : type === 'reminder' ? '督促' : '開催案内'}」のTemplate IDを設定してください`, 'error');
+    return;
+  }
+
+  const regs = Object.values(allRegs[currentEventId] || {});
+  // 送信対象を絞り込む
+  let targets;
+  if (type === 'payment' || type === 'reminder') {
+    targets = regs.filter(r => r.paymentStatus === 'pending');
+    if (targets.length === 0) { showToast('未入金の参加者はいません', 'success'); return; }
+  } else {
+    targets = regs;
+  }
+
+  const label = type === 'payment' ? 'お支払い依頼' : type === 'reminder' ? 'お支払い督促' : `開催案内（${timing}）`;
+  if (!confirm(`${targets.length}名に「${label}」メールを送信します。よろしいですか？`)) return;
+
+  showToast(`送信中... 0/${targets.length}`, 'success');
+  let sent = 0, failed = 0;
+
+  for (const r of targets) {
+    const timingMap = {
+      anytime: '申し込み後いつでも',
+      before_deadline: ev.paymentDeadline ? `${ev.paymentDeadline} までに` : '期日までに',
+      on_day: '当日現地にて',
+      after_event: 'イベント終了後'
+    };
+    const params = {
+      to_email:        r.email,
+      to_name:         r.name,
+      event_name:      ev.name,
+      event_date:      (ev.date || '') + (ev.time ? ' ' + ev.time : ''),
+      event_venue:     ev.venue || '-',
+      fee:             ev.fee > 0 ? '¥' + Number(ev.fee).toLocaleString() : '無料',
+      payment:         r.paymentMethod === 'bank' ? '銀行振込' : 'PayPay',
+      companions:      (r.companions || []).join('、') || 'なし',
+      total_count:     (r.totalCount || 1) + '名',
+      bank_info:       ev.bankInfo || '',
+      paypay_info:     ev.paypayInfo || '',
+      payment_timing:  timingMap[ev.paymentTiming || 'anytime'],
+      payment_note:    ev.paymentNote || '',
+      custom_message:  ev.emailMessage || '',
+      timing:          timing || '',
+    };
+    try {
+      await emailjs.send(appSettings.ejServiceId, templateId, params);
+      sent++;
+    } catch(e) {
+      failed++;
+      console.error('送信失敗:', r.email, e);
+    }
+    // レート制限対策で少し待つ
+    await new Promise(res => setTimeout(res, 300));
+  }
+
+  showToast(
+    failed > 0 ? `送信完了: ${sent}名成功 / ${failed}名失敗` : `${sent}名への送信が完了しました ✓`,
+    failed > 0 ? 'error' : 'success'
+  );
+}
 function openPaymentModal(rid, name, status, note) {
   editingRegId = rid;
   document.getElementById('paymentModalName').textContent = name + ' 様';
@@ -1328,8 +1657,23 @@ function renderPublicForm(eventId) {
     </div>
   ` : '';
 
+  // 支払いタイミング表示
+  const timingLabel = {
+    anytime: '申し込み後いつでも',
+    before_deadline: ev.paymentDeadline ? `${ev.paymentDeadline} までに` : '期日までに',
+    on_day: '当日現地にて',
+    after_event: 'イベント終了後'
+  }[ev.paymentTiming || 'anytime'];
+
+  const paymentTimingHtml = (ev.bankInfo || ev.paypayInfo) ? `
+    <div style="background:#fffbf0;border:1px solid #e6d58e;border-radius:var(--r);padding:12px 14px;margin-bottom:4px;font-size:13px;">
+      💳 <strong>お支払いタイミング：</strong>${esc(timingLabel)}
+      ${ev.paymentNote ? `<br><span style="color:var(--ink-light);font-size:12px;">${esc(ev.paymentNote)}</span>` : ''}
+    </div>` : '';
+
   const paymentSection = (ev.bankInfo || ev.paypayInfo) ? `
     <hr class="form-divider">
+    ${paymentTimingHtml}
     <div class="form-group">
       <label>お支払い方法 <span class="req">*</span></label>
       <div class="payment-options">
@@ -1347,7 +1691,14 @@ function renderPublicForm(eventId) {
     ${ev.paypayInfo ? `<div class="payment-info-box" id="paypayInfoBox" style="display:none;">${esc(ev.paypayInfo)}</div>` : ''}
   ` : '';
 
+  // フォームメッセージ
+  const formMessageHtml = ev.formMessage ? `
+    <div style="background:rgba(184,151,90,0.1);border-left:3px solid var(--gold);border-radius:0 var(--r) var(--r) 0;padding:12px 16px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--ink);">
+      ${esc(ev.formMessage).replace(/\n/g,'<br>')}
+    </div>` : '';
+
   document.getElementById('pubFormArea').innerHTML = `
+    ${formMessageHtml}
     <div class="card">
       <div class="form-grid">
         <div class="form-group span2">
@@ -1475,6 +1826,12 @@ async function submitForm(eventId) {
 
     // EmailJS送信
     if (appSettings.ejPublicKey && appSettings.ejServiceId && appSettings.ejTemplateId) {
+      const timingMap = {
+        anytime: '申し込み後いつでも',
+        before_deadline: ev.paymentDeadline ? `${ev.paymentDeadline} までに` : '期日までに',
+        on_day: '当日現地にて',
+        after_event: 'イベント終了後'
+      };
       const params = {
         to_email: email,
         to_name: name,
@@ -1485,6 +1842,11 @@ async function submitForm(eventId) {
         payment: payMethod === 'bank' ? '銀行振込' : 'PayPay',
         companions: companions.join('、') || 'なし',
         total_count: count + '名',
+        bank_info: ev.bankInfo || '',
+        paypay_info: ev.paypayInfo || '',
+        payment_timing: timingMap[ev.paymentTiming || 'anytime'],
+        payment_note: ev.paymentNote || '',
+        custom_message: ev.emailMessage || '',
         message: message || ''
       };
       await emailjs.send(appSettings.ejServiceId, appSettings.ejTemplateId, params);
