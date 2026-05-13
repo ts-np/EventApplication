@@ -802,7 +802,7 @@ tbody tr:hover { background: var(--paper); }
           <input type="text" id="evPaypayInfo" placeholder="例：PayPay ID: hanako_yamada">
         </div>
         <div class="form-group span2" style="border-top:1px solid var(--paper-dark);padding-top:16px;margin-top:4px;">
-          <label style="font-size:13px;color:var(--ink);margin-bottom:4px;display:block;">💳 支払いタイミング</label>
+          <label style="font-size:13px;color:var(--ink);margin-bottom:4px;display:block;">💳 支払いタイミング・案内設定</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">
             <div class="form-group">
               <label>支払いタイミング</label>
@@ -816,6 +816,14 @@ tbody tr:hover { background: var(--paper); }
             <div class="form-group" id="paymentDeadlineGroup">
               <label>支払い期日</label>
               <input type="date" id="evPaymentDeadline">
+            </div>
+            <div class="form-group span2">
+              <label>申し込み時の支払い情報の表示</label>
+              <select id="evPaymentInfoTiming">
+                <option value="immediate">申し込み時にフォーム・メールに表示する</option>
+                <option value="later">後で別途ご案内する（申し込み時は非表示）</option>
+              </select>
+              <span class="hint" id="paymentInfoTimingHint" style="margin-top:6px;display:block;"></span>
             </div>
             <div class="form-group span2">
               <label>支払い備考（メールに記載）</label>
@@ -1204,6 +1212,7 @@ function openEventModal(id) {
   document.getElementById('evPaypayInfo').value = f.paypayInfo || '';
   document.getElementById('evPaymentTiming').value = f.paymentTiming || 'anytime';
   document.getElementById('evPaymentDeadline').value = f.paymentDeadline || '';
+  document.getElementById('evPaymentInfoTiming').value = f.paymentInfoTiming || 'immediate';
   document.getElementById('evPaymentNote').value = f.paymentNote || '';
   document.getElementById('evFormMessage').value = f.formMessage || '';
   document.getElementById('evEmailMessage').value = f.emailMessage || '';
@@ -1252,6 +1261,7 @@ async function saveEvent() {
     paypayInfo: document.getElementById('evPaypayInfo').value.trim(),
     paymentTiming: document.getElementById('evPaymentTiming').value,
     paymentDeadline: document.getElementById('evPaymentDeadline').value,
+    paymentInfoTiming: document.getElementById('evPaymentInfoTiming').value,
     paymentNote: document.getElementById('evPaymentNote').value.trim(),
     formMessage: document.getElementById('evFormMessage').value.trim(),
     emailMessage: document.getElementById('evEmailMessage').value.trim(),
@@ -1509,6 +1519,7 @@ async function sendBulkEmail(type, timing) {
       total_count:     (r.totalCount || 1) + '名',
       bank_info:       ev.bankInfo || '',
       paypay_info:     ev.paypayInfo || '',
+      payment_info_notice: ev.paymentInfoTiming === 'later' ? 'お支払い方法については後日改めてご案内いたします。' : '',
       payment_timing:  timingMap[ev.paymentTiming || 'anytime'],
       payment_note:    ev.paymentNote || '',
       custom_message:  ev.emailMessage || '',
@@ -1673,7 +1684,9 @@ function renderPublicForm(eventId) {
       ${ev.paymentNote ? `<br><span style="color:var(--ink-light);font-size:12px;">${esc(ev.paymentNote)}</span>` : ''}
     </div>` : '';
 
-  const paymentSection = (ev.bankInfo || ev.paypayInfo) ? `
+  const showPaymentNow = (ev.paymentInfoTiming !== 'later');
+
+  const paymentSection = (ev.bankInfo || ev.paypayInfo) && showPaymentNow ? `
     <hr class="form-divider">
     ${paymentTimingHtml}
     <div class="form-group">
@@ -1691,6 +1704,12 @@ function renderPublicForm(eventId) {
     </div>
     ${ev.bankInfo ? `<div class="payment-info-box" id="bankInfoBox"><strong>振込先：</strong><br><pre style="font-size:12px;white-space:pre-wrap;">${esc(ev.bankInfo)}</pre></div>` : ''}
     ${ev.paypayInfo ? `<div class="payment-info-box" id="paypayInfoBox" style="display:none;">${esc(ev.paypayInfo)}</div>` : ''}
+  ` : !showPaymentNow ? `
+    <hr class="form-divider">
+    <div style="background:#f0f4ff;border:1px solid #c5d0f0;border-radius:var(--r);padding:14px;font-size:13px;color:#2c5f8a;">
+      💳 お支払い方法は後日ご案内いたします。
+      ${ev.paymentNote ? `<br><span style="font-size:12px;color:var(--ink-light);">${esc(ev.paymentNote)}</span>` : ''}
+    </div>
   ` : '';
 
   // フォームメッセージ
@@ -1844,8 +1863,9 @@ async function submitForm(eventId) {
         payment: payMethod === 'bank' ? '銀行振込' : 'PayPay',
         companions: companions.join('、') || 'なし',
         total_count: count + '名',
-        bank_info: ev.bankInfo || '',
-        paypay_info: ev.paypayInfo || '',
+        bank_info: ev.paymentInfoTiming !== 'later' ? (ev.bankInfo || '') : '※ お支払い方法は後日ご案内いたします。',
+        paypay_info: ev.paymentInfoTiming !== 'later' ? (ev.paypayInfo || '') : '',
+        payment_info_notice: ev.paymentInfoTiming === 'later' ? 'お支払い方法については後日改めてご案内いたします。' : '',
         payment_timing: timingMap[ev.paymentTiming || 'anytime'],
         payment_note: ev.paymentNote || '',
         custom_message: ev.emailMessage || '',
