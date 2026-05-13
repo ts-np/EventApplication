@@ -1118,6 +1118,7 @@ function initFirebaseListeners() {
 
   onValue(ref(db, 'registrations'), snap => {
     allRegs = snap.val() || {};
+    renderEventList();
     if (currentEventId && document.getElementById('page-participants').classList.contains('active')) {
       renderParticipants(currentEventId);
     }
